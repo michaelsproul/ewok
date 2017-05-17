@@ -1,0 +1,7 @@
+[package]
+name = "ewok"
+version = "0.1.0"
+authors = ["Michael Sproul <micsproul@gmail.com>"]
+
+[dependencies]
+rand = "0.3"

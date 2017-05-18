@@ -18,9 +18,11 @@ pub struct Simulation {
 impl Simulation {
     pub fn new(max_steps: u64, max_delay: u64, num_nodes: u64) -> Self {
         let mut init_nodes = HashMap::new();
+        // apc := active peer cutoff.
+        let apc = max_delay;
 
         let first_name = random();
-        init_nodes.insert(first_name, Node::first(first_name));
+        init_nodes.insert(first_name, Node::first(first_name, apc));
 
         for _ in 0..(num_nodes - 1) {
             init_nodes.insert(random::<u64>(), Node::joining());
@@ -66,16 +68,17 @@ impl Simulation {
 
         // Steal blocks off the first valid node.
         // FIXME
-        let (valid, current, votes) = match self.active_nodes().next().unwrap() {
+        let (valid, current, votes, apc) = match self.active_nodes().next().unwrap() {
             (_, &Active(ref node)) => {
                 (node.current_blocks.clone(),
                  node.valid_blocks.clone(),
-                 node.vote_counts.clone())
+                 node.vote_counts.clone(),
+                 node.active_peer_cutoff)
             }
             _ => panic!()
         };
 
-        self.nodes.get_mut(&joining).unwrap().make_active(joining, valid, current, votes);
+        self.nodes.get_mut(&joining).unwrap().make_active(joining, valid, current, votes, apc);
 
         messages
     }
@@ -93,7 +96,7 @@ impl Simulation {
             for message in delivered {
                 match *self.nodes.get_mut(&message.recipient).unwrap() {
                     Active(ref mut node) => {
-                        let new_messages = node.handle_message(message);
+                        let new_messages = node.handle_message(message, step);
                         self.network.send(step, new_messages);
                     }
                     /*
@@ -103,6 +106,16 @@ impl Simulation {
                     */
                     WaitingToJoin => panic!("invalid")
                 }
+            }
+        }
+
+        println!("-- final node states --");
+        for node in self.nodes.values() {
+            match *node {
+                Active(ref node) => {
+                    println!("{}: current_blocks: {:#?}", node, node.current_blocks);
+                }
+                _ => ()
             }
         }
     }

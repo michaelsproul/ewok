@@ -14,8 +14,8 @@ pub enum MessageContent {
     VoteMsg(Vote),
     /// Pseudo-message sent from joining node (sender) to all section members (recipients).
     NodeJoined,
-    /// Pseudo-message sent to tell recipient that they've lost their connection to sender.
-    ConnectionLost,
-    /// Pseudo-message sent to tell sender that they've (re)gained a connection to sender.
-    ConnectionEstablished,
+    // Pseudo-message sent to tell recipient that they've lost their connection to sender.
+    //ConnectionLost,
+    //Pseudo-message sent to tell sender that they've (re)gained a connection to sender.
+    //ConnectionEstablished,
 }

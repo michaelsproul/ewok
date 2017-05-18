@@ -79,11 +79,13 @@ impl NameT for u64 {
 // A group prefix, i.e. a sequence of bits specifying the part of the network's name space
 // consisting of all names that start with this sequence.
 #[derive(Clone, Copy, Default, Eq, Ord)]
+#[allow(dead_code)]
 pub struct Prefix {
     bit_count: usize,
     name: u64,
 }
 
+#[allow(dead_code)]
 impl Prefix {
     /// Creates a new `Prefix` with the first `bit_count` bits of `name`.
     /// Insignificant bits are all set to 0.

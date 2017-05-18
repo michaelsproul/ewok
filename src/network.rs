@@ -49,8 +49,6 @@ impl Network {
             .flat_map(|(&step_sent, messages)| {
                 // Partition randomly based on p, whilst also delivering any messages
                 // which were sent at start step.
-                // This means messages sent in step 0 are instantly delivered
-                // but that's probably fine.
                 let (deliver, leave) = messages.drain(..).partition(|_| {
                     let deliver_random = random::<f64>() <= prob_deliver;
                     let force_deliver = step_sent == start_step;

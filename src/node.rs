@@ -6,6 +6,7 @@ use block::{Block, Vote};
 
 use std::iter::FromIterator;
 use std::collections::{BTreeMap, BTreeSet};
+use std::mem;
 
 use self::Node::*;
 
@@ -138,19 +139,13 @@ impl ActiveNode {
             let mut new_frontier = BTreeSet::new();
 
             for (vote, voters) in frontier {
-
                 if !self.valid_blocks.contains(&vote.to) {
                     println!("{}: new valid block: {:?}", self, vote.to);
                     self.valid_blocks.insert(vote.to.clone());
                     new_valid_votes.push((vote.clone(), voters));
 
                     // Update current blocks.
-                    // FIXME: need to also remove superseded sibling blocks.
-                    if self.current_blocks.remove(&vote.from) {
-                        println!("{}: block no longer current: {:?}", self, vote.from);
-                    }
-                    println!("{}: new current block: {:?}", self, vote.to);
-                    self.current_blocks.insert(vote.to.clone());
+                    self.add_new_current_block(vote.to.clone());
                 }
 
                 new_frontier.extend(self.successors(&vote.to));
@@ -160,6 +155,27 @@ impl ActiveNode {
         }
 
         new_valid_votes
+    }
+
+    /// Add a new current block, removing any blocks that it supersedes.
+    pub fn add_new_current_block(&mut self, new_block: Block) {
+        let mut new_current_blocks = BTreeSet::new();
+        let mut add_new_block = false;
+        let our_name = self.our_name;
+
+        for block in mem::replace(&mut self.current_blocks, BTreeSet::new()) {
+            if new_block.is_admissable_after(&block) {
+                add_new_block = true;
+                println!("Node({}): block no longer current: {:?}", our_name, block);
+            } else {
+                new_current_blocks.insert(block);
+            }
+        }
+
+        if add_new_block {
+            new_current_blocks.insert(new_block);
+        }
+        self.current_blocks = new_current_blocks;
     }
 
     /// Add a block to our local cache, and update our current and valid blocks.

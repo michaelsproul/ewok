@@ -38,7 +38,6 @@ impl Block {
     }
 
     // Is this block admissable after the given other block?
-    #[allow(unused)]
     pub fn is_admissable_after(&self, other: &Block) -> bool {
         // FIXME: super incomplete, but should work for Adds
         self.version > other.version &&

@@ -21,14 +21,6 @@ impl Network {
         }
     }
 
-    fn lower_bound(&self, step: u64) -> u64 {
-        if step >= self.max_delay {
-            step - self.max_delay
-        } else {
-            0
-        }
-    }
-
     fn delivery_probability(max_delay: u64) -> f64 {
         // Probability that a message won't be delivered by the randomised delivery
         // after `max_delay` tries.
@@ -41,7 +33,7 @@ impl Network {
 
     /// Get messages delivered at the given step (randomised).
     pub fn receive(&mut self, step: u64) -> Vec<Message> {
-        let start_step = self.lower_bound(step);
+        let start_step = step.saturating_sub(self.max_delay);
 
         let prob_deliver = self.prob_deliver;
 

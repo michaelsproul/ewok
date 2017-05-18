@@ -14,12 +14,14 @@ pub struct Simulation {
     network: Network,
     genesis: Block,
     max_steps: u64,
-    active_peer_cutoff: u64
+    active_peer_cutoff: u64,
+    /// Join a node once every this many steps, e.g. join_rate = 10 means join at 0, 10, 20...
+    join_rate: u64
     // TODO: track node connections out here.
 }
 
 impl Simulation {
-    pub fn new(max_steps: u64, max_delay: u64, num_nodes: u64, apc: u64) -> Self {
+    pub fn new(max_steps: u64, max_delay: u64, num_nodes: u64, apc: u64, join_rate: u64) -> Self {
         let mut init_nodes = BTreeMap::new();
 
         let first_name = random();
@@ -35,7 +37,8 @@ impl Simulation {
             genesis,
             network: Network::new(max_delay),
             max_steps,
-            active_peer_cutoff: apc
+            active_peer_cutoff: apc,
+            join_rate
         }
     }
 
@@ -81,9 +84,11 @@ impl Simulation {
         for step in 0..self.max_steps {
             println!("-- step {} --", step);
 
-            // Join an existing node if one exists.
-            let join_messages = self.join_node();
-            self.network.send(step, join_messages);
+            // Join an existing node if one exists, and it's been long enough since the last join.
+            if step % self.join_rate == 0 {
+                let join_messages = self.join_node();
+                self.network.send(step, join_messages);
+            }
 
             let delivered = self.network.receive(step);
 

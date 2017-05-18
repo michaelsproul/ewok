@@ -1,37 +1,41 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use network::Network;
 use node::Node;
 use node::Node::*;
 use name::Name;
+use block::Block;
 use message::Message;
 use message::MessageContent::*;
 use random::{random, sample};
 
 pub struct Simulation {
-    nodes: HashMap<Name, Node>,
+    nodes: BTreeMap<Name, Node>,
     network: Network,
-    max_steps: u64
+    genesis: Block,
+    max_steps: u64,
+    active_peer_cutoff: u64
     // TODO: track node connections out here.
 }
 
 impl Simulation {
-    pub fn new(max_steps: u64, max_delay: u64, num_nodes: u64) -> Self {
-        let mut init_nodes = HashMap::new();
-        // apc := active peer cutoff.
-        let apc = max_delay;
+    pub fn new(max_steps: u64, max_delay: u64, num_nodes: u64, apc: u64) -> Self {
+        let mut init_nodes = BTreeMap::new();
 
         let first_name = random();
-        init_nodes.insert(first_name, Node::first(first_name, apc));
+        let genesis = Block::genesis(first_name);
+        init_nodes.insert(first_name, Node::first(first_name, genesis.clone(), apc));
 
         for _ in 0..(num_nodes - 1) {
-            init_nodes.insert(random::<u64>(), Node::joining());
+            init_nodes.insert(random(), Node::joining());
         }
 
         Simulation {
             nodes: init_nodes,
+            genesis,
             network: Network::new(max_delay),
-            max_steps
+            max_steps,
+            active_peer_cutoff: apc
         }
     }
 
@@ -56,8 +60,7 @@ impl Simulation {
             None => return vec![]
         };
 
-        // TODO: pick a node, send to its idea of this node's section.
-        // for now, send to all.
+        // TODO: send only to this node's section (for now, send to the whole network).
         let messages = self.active_nodes().map(|(&neighbour, _)| {
             Message {
                 sender: joining,
@@ -66,19 +69,10 @@ impl Simulation {
             }
         }).collect();
 
-        // Steal blocks off the first valid node.
-        // FIXME
-        let (valid, current, votes, apc) = match self.active_nodes().next().unwrap() {
-            (_, &Active(ref node)) => {
-                (node.current_blocks.clone(),
-                 node.valid_blocks.clone(),
-                 node.vote_counts.clone(),
-                 node.active_peer_cutoff)
-            }
-            _ => panic!()
-        };
-
-        self.nodes.get_mut(&joining).unwrap().make_active(joining, valid, current, votes, apc);
+        // Make the node active, and let it build its way up from the genesis block.
+        let genesis = self.genesis.clone();
+        let apc = self.active_peer_cutoff;
+        self.nodes.get_mut(&joining).unwrap().make_active(joining, genesis, apc);
 
         messages
     }
@@ -120,5 +114,3 @@ impl Simulation {
         }
     }
 }
-
-

@@ -1,19 +1,26 @@
 use block::Vote;
 use name::Name;
+use node::VoteCounts;
 
-#[derive(Debug)]
+use std::collections::BTreeSet;
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Message {
     pub sender: Name,
     pub recipient: Name,
     pub content: MessageContent
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MessageContent {
     /// Vote for a block to succeed another block.
     VoteMsg(Vote),
-    /// Pseudo-message sent from joining node (sender) to all section members (recipients).
+    /// Notification that we believe this vote to be agreed by all the listed members.
+    VoteAgreedMsg((Vote, BTreeSet<Name>)),
+    /// Message sent from joining node (sender) to all section members (recipients).
     NodeJoined,
+    /// Message sent to a joining node to get it up to date on the current blocks.
+    BootstrapMsg(VoteCounts)
     // Pseudo-message sent to tell recipient that they've lost their connection to sender.
     //ConnectionLost,
     //Pseudo-message sent to tell sender that they've (re)gained a connection to sender.

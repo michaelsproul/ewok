@@ -94,6 +94,7 @@ impl ActiveNode {
         }
     }
 
+    /// Insert a vote into our local cache of votes.
     fn add_vote_to_cache<I>(&mut self, vote: Vote, voted_for: I)
         where I: IntoIterator<Item=Name>
     {
@@ -118,7 +119,7 @@ impl ActiveNode {
         Box::new(iter)
     }
 
-    /// Update valid blocks, return set of newly valid blocks to broadcast.
+    /// Update valid and current block sets, return set of newly valid blocks to broadcast.
     fn update_valid_blocks(&mut self, vote: &Vote) -> Vec<(Vote, BTreeSet<Name>)> {
         // Set of valid blocks to branch out from.
         // Stored as a set of votes where the frontier blocks are the "to" component,
@@ -245,6 +246,7 @@ impl ActiveNode {
         for node in self.peer_states.nodes_to_add(step) {
             for block in &self.current_blocks {
                 if !block.members.contains(&node) {
+                    println!("{}: peer {} is missing from current block: {:?}", self, node, block);
                     votes.push(Vote {
                         from: block.clone(),
                         to: block.add_node(node)
@@ -256,6 +258,8 @@ impl ActiveNode {
         for node in self.peer_states.nodes_to_drop(step) {
             for block in &self.current_blocks {
                 if block.members.contains(&node) {
+                    println!("{}: peer {} should be removed from current block: {:?}",
+                             self, node, block);
                     votes.push(Vote {
                         from: block.clone(),
                         to: block.remove_node(node)
@@ -268,7 +272,6 @@ impl ActiveNode {
     }
 
     pub fn broadcast_new_votes(&mut self, step: u64) -> Vec<Message> {
-        // FIXME: Do we need to iterate to hit a fixed point here...?
         let votes = self.construct_new_votes(step);
         let our_name = self.our_name;
 
@@ -310,6 +313,7 @@ impl ActiveNode {
         to_send
     }
 
+    /// Handle a message intended for us and return messages we'd like to send.
     pub fn handle_message(&mut self, message: Message, step: u64) -> Vec<Message> {
         let mut to_send = match message.content {
             NodeJoined => {

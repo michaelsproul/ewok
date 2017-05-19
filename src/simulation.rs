@@ -8,6 +8,7 @@ use name::Name;
 use block::Block;
 use message::Message;
 use message::MessageContent::*;
+use params::NodeParams;
 use random::{random, sample_single, do_with_probability};
 
 pub struct Simulation {
@@ -15,7 +16,8 @@ pub struct Simulation {
     network: Network,
     genesis: Block,
     max_steps: u64,
-    active_peer_cutoff: u64,
+    /// Parameters for nodes.
+    node_params: NodeParams,
     /// Probability of a node joining on a given step.
     prob_join: f64,
     /// Probability of a node leaving on a given step.
@@ -32,12 +34,14 @@ pub struct Simulation {
 
 impl Simulation {
     // TODO: consider getting rid of "num_nodes" parameter?
-    pub fn new(max_steps: u64, max_delay: u64, num_nodes: u64, apc: u64, prob_join: f64) -> Self {
+    pub fn new(max_steps: u64, max_delay: u64, num_nodes: u64, prob_join: f64,
+               node_params: NodeParams) -> Self {
         let mut init_nodes = BTreeMap::new();
 
         let first_name = random();
         let genesis = Block::genesis(first_name);
-        init_nodes.insert(first_name, Node::first(first_name, genesis.clone(), apc));
+        let first_node = Node::first(first_name, genesis.clone(), node_params.clone());
+        init_nodes.insert(first_name, first_node);
 
         for _ in 0..(num_nodes - 1) {
             init_nodes.insert(random(), Node::joining());
@@ -50,7 +54,7 @@ impl Simulation {
             genesis,
             network: Network::new(max_delay),
             max_steps,
-            active_peer_cutoff: apc,
+            node_params,
             prob_join,
             // FIXME: parameterise these
             prob_drop: 0.00,
@@ -91,8 +95,8 @@ impl Simulation {
 
         // Make the node active, and let it build its way up from the genesis block.
         let genesis = self.genesis.clone();
-        let apc = self.active_peer_cutoff;
-        self.nodes.get_mut(&joining).unwrap().make_active(joining, genesis, apc);
+        let params = self.node_params.clone();
+        self.nodes.get_mut(&joining).unwrap().make_active(joining, genesis, params);
 
         messages
     }

@@ -1,12 +1,12 @@
 use name::Name;
 use std::collections::BTreeMap;
 use std::mem;
+use params::NodeParams;
 
 use self::PeerState::*;
 
-// FIXME: make private again
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum PeerState {
+enum PeerState {
     /// Appeared in all current blocks at some point.
     Confirmed,
     /// Appeared in at least one current block at some point.
@@ -27,22 +27,22 @@ pub enum PeerState {
 
 pub struct PeerStates {
     /// States of known peers.
-    pub states: BTreeMap<Name, PeerState>,
-    /// Time to wait before voting to remove a node that we see disconnect from us.
-    #[allow(unused)]
-    remove_timeout: u64,
-    /// Number of steps to wait for a node to appear in all current sections after it has
-    /// first appeared in a single current section. FIXME: this description not quite accurate.
-    join_stabilisation_timeout: u64
+    states: BTreeMap<Name, PeerState>,
+    /// Parameters like timeouts, etc.
+    params: NodeParams
 }
 
 impl PeerStates {
-    pub fn new(remove_timeout: u64, join_stabilisation_timeout: u64) -> Self {
+    pub fn new(params: NodeParams) -> Self {
         PeerStates {
-            remove_timeout,
-            join_stabilisation_timeout,
             states: BTreeMap::new(),
+            params
         }
+    }
+
+    /// Names of all known peers.
+    pub fn all_peers(&self) -> Vec<Name> {
+        self.states.keys().cloned().collect()
     }
 
     /// Called when we see a NodeJoined message.
@@ -127,7 +127,7 @@ impl PeerStates {
         self.states.iter().filter(|&(_, state)| {
             match *state {
                 PartiallyConfirmed { since } | Unconfirmed { since } => {
-                    since >= step.saturating_sub(self.join_stabilisation_timeout)
+                    since >= step.saturating_sub(self.params.join_stabilisation_timeout)
                 }
                 _ => false
             }
@@ -143,12 +143,12 @@ impl PeerStates {
             match *state {
                 // Remove rule, part 1.
                 Disconnected { .. } => {
-                    // Use remove timeout here??
+                    // TODO: use a timeout here?
                     true
                 }
                 // Remove rule, part 2.
                 PartiallyConfirmed { since } | Unconfirmed { since } => {
-                    since < step.saturating_sub(self.join_stabilisation_timeout)
+                    since < step.saturating_sub(self.params.join_stabilisation_timeout)
                 }
                 _ => false
             }

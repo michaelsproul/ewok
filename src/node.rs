@@ -4,6 +4,7 @@ use message::MessageContent::*;
 use name::Name;
 use block::{Block, Vote};
 use peer_state::PeerStates;
+use params::NodeParams;
 
 use std::iter::FromIterator;
 use std::collections::{BTreeMap, BTreeSet};
@@ -22,8 +23,8 @@ pub enum Node {
 }
 
 impl Node {
-    pub fn first(name: Name, genesis: Block, active_peer_cutoff: u64) -> Self {
-        Active(ActiveNode::new(name, genesis, active_peer_cutoff))
+    pub fn first(name: Name, genesis: Block, params: NodeParams) -> Self {
+        Active(ActiveNode::new(name, genesis, params))
     }
 
     pub fn joining() -> Self {
@@ -51,10 +52,10 @@ impl Node {
     pub fn make_active(&mut self,
                        name: Name,
                        genesis: Block,
-                       active_peer_cutoff: u64)
+                       params: NodeParams)
     {
         println!("Node({}): starting up!", name);
-        *self = Active(ActiveNode::new(name, genesis, active_peer_cutoff));
+        *self = Active(ActiveNode::new(name, genesis, params));
     }
 }
 
@@ -66,7 +67,6 @@ pub struct ActiveNode {
     /// Our current blocks.
     pub current_blocks: CurrentBlocks,
     /// Map from blocks to voters for that block.
-    // votes: successor -> (predecessor -> set of voters)
     pub vote_counts: VoteCounts,
     /// States for peers.
     pub peer_states: PeerStates,
@@ -83,16 +83,13 @@ impl fmt::Display for ActiveNode {
 }
 
 impl ActiveNode {
-    pub fn new(name: Name, genesis: Block, _active_peer_cutoff: u64) -> Self {
-        // FIXME: parameterise.
-        let remove_timeout = 50;
-        let join_stabilisation_timeout = 50;
+    pub fn new(name: Name, genesis: Block, params: NodeParams) -> Self {
         ActiveNode {
             our_name: name,
             valid_blocks: BTreeSet::from_iter(vec![genesis.clone()]),
             current_blocks: BTreeSet::from_iter(vec![genesis]),
             vote_counts: BTreeMap::new(),
-            peer_states: PeerStates::new(remove_timeout, join_stabilisation_timeout),
+            peer_states: PeerStates::new(params),
             message_filter: BTreeSet::new()
         }
     }
@@ -218,11 +215,13 @@ impl ActiveNode {
     }
 
     /// Return all neighbours we're connected to (or should be connected to).
+    // TODO: will need adjusting once we have multiple sections.
     pub fn neighbouring_nodes(&self) -> BTreeSet<Name> {
-        // TODO: filter this better
-        let mut res: BTreeSet<_> = self.current_blocks.iter().flat_map(|block| block.members.clone()).collect();
+        let mut res: BTreeSet<_> = self.current_blocks.iter()
+            .flat_map(|block| block.members.clone())
+            .collect();
+        res.extend(self.peer_states.all_peers());
         res.remove(&self.our_name);
-        res.extend(self.peer_states.states.keys().map(|&name| name));
         res
     }
 

@@ -3,6 +3,7 @@ use message::MessageContent;
 use message::MessageContent::*;
 use name::Name;
 use block::{Block, Vote};
+use peer_state::PeerStates;
 
 use std::iter::FromIterator;
 use std::collections::{BTreeMap, BTreeSet};
@@ -16,7 +17,7 @@ pub type VoteCounts = BTreeMap<Vote, BTreeSet<Name>>;
 
 pub enum Node {
     WaitingToJoin,
-    //Dead,
+    Dead,
     Active(ActiveNode)
 }
 
@@ -43,6 +44,10 @@ impl Node {
         }
     }
 
+    pub fn kill(&mut self) {
+        *self = Dead;
+    }
+
     pub fn make_active(&mut self,
                        name: Name,
                        genesis: Block,
@@ -63,13 +68,11 @@ pub struct ActiveNode {
     /// Map from blocks to voters for that block.
     // votes: successor -> (predecessor -> set of voters)
     pub vote_counts: VoteCounts,
-    /// Map from node name to step # when that node was last considered "active".
-    /// For joining nodes, we consider them active from the point where they pass resource proof.
-    pub active_peers: BTreeMap<Name, u64>,
-    /// Time after which to give up on a peer.
-    pub active_peer_cutoff: u64,
+    /// States for peers.
+    pub peer_states: PeerStates,
     /// Filter for messages we've already sent and shouldn't resend.
-    pub message_filter: BTreeSet<Message>
+    pub message_filter: BTreeSet<Message>,
+
 }
 
 use std::fmt;
@@ -80,14 +83,16 @@ impl fmt::Display for ActiveNode {
 }
 
 impl ActiveNode {
-    pub fn new(name: Name, genesis: Block, active_peer_cutoff: u64) -> Self {
+    pub fn new(name: Name, genesis: Block, _active_peer_cutoff: u64) -> Self {
+        // FIXME: parameterise.
+        let remove_timeout = 50;
+        let join_stabilisation_timeout = 50;
         ActiveNode {
             our_name: name,
             valid_blocks: BTreeSet::from_iter(vec![genesis.clone()]),
             current_blocks: BTreeSet::from_iter(vec![genesis]),
             vote_counts: BTreeMap::new(),
-            active_peers: BTreeMap::new(),
-            active_peer_cutoff,
+            peer_states: PeerStates::new(remove_timeout, join_stabilisation_timeout),
             message_filter: BTreeSet::new()
         }
     }
@@ -173,9 +178,29 @@ impl ActiveNode {
         }
 
         if add_new_block {
+            println!("{}: new current block: {:?}", self, new_block);
             new_current_blocks.insert(new_block);
         }
         self.current_blocks = new_current_blocks;
+    }
+
+    /// Update peer states for changes to the set of current blocks.
+    pub fn update_peer_states(&mut self, step: u64) {
+        let current_in_all = self.current_blocks.iter().fold(BTreeSet::new(), |acc, block| {
+            &acc & &block.members
+        });
+        let current_in_any = self.current_blocks.iter().fold(BTreeSet::new(), |acc, block| {
+            &acc | &block.members
+        });
+        let current_in_some = &current_in_any - &current_in_all;
+
+        for name in current_in_all {
+            self.peer_states.current_in_all(name, step);
+        }
+
+        for name in current_in_some {
+            self.peer_states.current_in_some(name, step);
+        }
     }
 
     /// Add a block to our local cache, and update our current and valid blocks.
@@ -197,7 +222,7 @@ impl ActiveNode {
         // TODO: filter this better
         let mut res: BTreeSet<_> = self.current_blocks.iter().flat_map(|block| block.members.clone()).collect();
         res.remove(&self.our_name);
-        res.extend(self.active_peers.keys().map(|&name| name));
+        res.extend(self.peer_states.states.keys().map(|&name| name));
         res
     }
 
@@ -217,19 +242,24 @@ impl ActiveNode {
     /// Construct new successor blocks based on our view of the network.
     pub fn construct_new_votes(&self, step: u64) -> Vec<Vote> {
         let mut votes = vec![];
-        for current_block in &self.current_blocks {
-            if !current_block.members.contains(&self.our_name) {
-                continue;
-            }
 
-            for (peer, last_active) in &self.active_peers {
-                // FIXME: >= or >?
-                if *last_active >= step.saturating_sub(self.active_peer_cutoff) &&
-                   !current_block.members.contains(peer) {
-                    println!("{}: peer {} is missing from current_block: {:?}", self, peer, current_block);
+        for node in self.peer_states.nodes_to_add(step) {
+            for block in &self.current_blocks {
+                if !block.members.contains(&node) {
                     votes.push(Vote {
-                        from: current_block.clone(),
-                        to: current_block.add_node(*peer)
+                        from: block.clone(),
+                        to: block.add_node(node)
+                    });
+                }
+            }
+        }
+
+        for node in self.peer_states.nodes_to_drop(step) {
+            for block in &self.current_blocks {
+                if block.members.contains(&node) {
+                    votes.push(Vote {
+                        from: block.clone(),
+                        to: block.remove_node(node)
                     });
                 }
             }
@@ -255,6 +285,9 @@ impl ActiveNode {
         // Construct vote messages and broadcast.
         let vote_msgs: Vec<_> = votes.into_iter().map(VoteMsg).collect();
         to_broadcast.extend(self.broadcast(vote_msgs));
+
+        // TODO: does this belong here..?
+        self.update_peer_states(step);
 
         to_broadcast
     }
@@ -284,8 +317,8 @@ impl ActiveNode {
                 let joining_node = message.sender;
                 println!("{}: received join message for: {}", self, joining_node);
 
-                // Add joining node to active peers so we keep voting to add them.
-                self.active_peers.insert(joining_node, step);
+                // Mark the peer as having joined so that we vote to keep adding it.
+                self.peer_states.node_joined(joining_node, step);
 
                 // Broadcast new votes.
                 let mut messages = self.broadcast_new_votes(step);
@@ -307,6 +340,16 @@ impl ActiveNode {
             BootstrapMsg(vote_counts) => {
                 println!("{}: applying bootstrap message from {}", self, message.sender);
                 self.apply_bootstrap_msg(vote_counts)
+            }
+            ConnectionLost => {
+                println!("{}: lost our connection to {}", self, message.sender);
+                self.peer_states.disconnected(message.sender, step);
+                self.broadcast_new_votes(step)
+            },
+            ConnectionRegained => {
+                println!("{}: regained our connection to {}", self, message.sender);
+                self.peer_states.reconnected(message.sender, step);
+                self.broadcast_new_votes(step)
             }
         };
 

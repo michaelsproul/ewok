@@ -37,6 +37,17 @@ impl Block {
         }
     }
 
+    /// Create a new block with a node removed.
+    pub fn remove_node(&self, removed: Name) -> Self {
+        let mut members = self.members.clone();
+        assert!(members.remove(&removed));
+        Block {
+            prefix: self.prefix,
+            version: self.version + 1,
+            members
+        }
+    }
+
     // Is this block admissable after the given other block?
     pub fn is_admissable_after(&self, other: &Block) -> bool {
         // FIXME: super incomplete, but should work for Adds

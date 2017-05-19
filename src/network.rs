@@ -3,6 +3,9 @@ use message::Message;
 
 use random::random;
 
+// FIXME: need to implement in-order message delivery so that disconnects and reconnects
+// don't get out of order.
+// A BTreeMap<(Name, Name), BTreeMap<u64, Vec<Message>> should be sufficient.
 pub struct Network {
     /// Maximum delay in steps before a message is guaranteed to have been delivered.
     max_delay: u64,

@@ -20,9 +20,10 @@ pub enum MessageContent {
     /// Message sent from joining node (sender) to all section members (recipients).
     NodeJoined,
     /// Message sent to a joining node to get it up to date on the current blocks.
-    BootstrapMsg(VoteCounts)
-    // Pseudo-message sent to tell recipient that they've lost their connection to sender.
-    //ConnectionLost,
-    //Pseudo-message sent to tell sender that they've (re)gained a connection to sender.
-    //ConnectionEstablished,
+    BootstrapMsg(VoteCounts),
+    /// Pseudo-message sent to tell recipient that they've lost their connection to sender.
+    ConnectionLost,
+    /// Pseudo-message sent to tell recipient that they've regained a connection to sender.
+    #[allow(unused)]
+    ConnectionRegained,
 }

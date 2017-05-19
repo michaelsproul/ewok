@@ -164,7 +164,6 @@ impl Simulation {
             }
 
             // Remove an existing node if one exists, and we're past the stabilisation threshold.
-            // FIXME: adjustable stabilisation threshold.
             if step >= self.drop_step && do_with_probability(self.prob_drop) {
                 let remove_messages = self.drop_node();
                 self.network.send(step, remove_messages);

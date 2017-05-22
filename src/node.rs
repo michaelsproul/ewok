@@ -3,9 +3,10 @@ use message::MessageContent;
 use message::MessageContent::*;
 use name::Name;
 use block::{Block, Vote, ValidBlocks, CurrentBlocks, VoteCounts,
-            new_valid_blocks, compute_current_blocks};
+            new_valid_blocks, compute_current_blocks, our_blocks};
 use peer_state::{PeerStates, in_all_current, in_any_current};
 use params::NodeParams;
+use split::split_blocks;
 
 use std::iter::FromIterator;
 use std::collections::{BTreeMap, BTreeSet};
@@ -178,8 +179,7 @@ impl ActiveNode {
 
     /// Blocks that we can legitimately vote on successors for, because we are part of them.
     pub fn our_current_blocks<'a>(&'a self) -> Box<Iterator<Item=&'a Block> + 'a> {
-        let ours = self.current_blocks.iter().filter(move |&b| b.members.contains(&self.our_name));
-        Box::new(ours)
+        our_blocks(&self.current_blocks, self.our_name)
     }
 
     /// Construct new successor blocks based on our view of the network.
@@ -210,6 +210,9 @@ impl ActiveNode {
                 }
             }
         }
+
+        // TODO: parametrise by min_split_size
+        votes.extend(split_blocks(&self.current_blocks, self.our_name, 2));
 
         votes
     }

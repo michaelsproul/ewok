@@ -1,4 +1,5 @@
 use name::{Prefix, Name};
+use util::abs_diff;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -53,9 +54,26 @@ impl Block {
 
     // Is this block admissable after the given other block?
     pub fn is_admissable_after(&self, other: &Block) -> bool {
-        // FIXME: super incomplete, but should work for Adds
-        self.version > other.version &&
-        self.prefix == other.prefix
+        if self.version <= other.version {
+            return false;
+        }
+
+        // Add/remove case.
+        if self.prefix == other.prefix {
+            abs_diff(self.members.len(), other.members.len()) == 1
+        }
+        // Split case.
+        else if self.prefix.popped() == other.prefix {
+            // TODO: check prefix matches members.
+            true
+        }
+        // Merge case
+        else if other.prefix.popped() == self.prefix {
+            // TODO
+            false
+        } else {
+            false
+        }
     }
 }
 
@@ -167,4 +185,12 @@ pub fn is_quorum_of(voters: &BTreeSet<Name>, members: &BTreeSet<Name>) -> bool {
     let valid_voters = voters & members;
     assert_eq!(voters.len(), valid_voters.len());
     valid_voters.len() * 2 > members.len()
+}
+
+/// Blocks that we can legitimately vote on successors for, because we are part of them.
+pub fn our_blocks<'a>(blocks: &'a BTreeSet<Block>, our_name: Name)
+    -> Box<Iterator<Item=&'a Block> + 'a>
+{
+    let ours = blocks.iter().filter(move |b| b.members.contains(&our_name));
+    Box::new(ours)
 }

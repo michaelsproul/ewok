@@ -12,17 +12,19 @@ mod params;
 mod peer_state;
 mod random;
 mod simulation;
+mod split;
+mod util;
 
 use simulation::Simulation;
 use params::{SimulationParams, NodeParams};
 
 fn main() {
     let params = SimulationParams {
-        num_nodes: 5,
-        num_steps: 100,
+        num_nodes: 20,
+        num_steps: 1000,
         max_delay: 5,
         prob_join: 0.1,
-        prob_drop: 0.03,
+        prob_drop: 0.00,
         drop_step: 30
     };
 

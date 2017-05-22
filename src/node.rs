@@ -2,7 +2,8 @@ use message::Message;
 use message::MessageContent;
 use message::MessageContent::*;
 use name::Name;
-use block::{Block, Vote};
+use block::{Block, Vote, ValidBlocks, CurrentBlocks, VoteCounts,
+            new_valid_blocks, compute_current_blocks};
 use peer_state::{PeerStates, in_all_current, in_any_current};
 use params::NodeParams;
 
@@ -12,10 +13,6 @@ use std::mem;
 use std::fmt;
 
 use self::Node::*;
-
-pub type ValidBlocks = BTreeSet<Block>;
-pub type CurrentBlocks = BTreeSet<Block>;
-pub type VoteCounts = BTreeMap<Vote, BTreeSet<Name>>;
 
 pub enum Node {
     WaitingToJoin,
@@ -102,84 +99,28 @@ impl ActiveNode {
         voters.extend(voted_for);
     }
 
-    /// Return all votes for blocks that succeed the given block.
-    fn successors<'a>(&'a self, from: &'a Block) -> Box<Iterator<Item=(Vote, BTreeSet<Name>)> + 'a> {
-        // TODO: could be more efficient with look-up by `from` block.
-        let iter = self.vote_counts.iter()
-            .filter(move |&(vote, _)| {
-                &vote.from == from
-            })
-            .filter(|&(vote, voters)| {
-                is_quorum_of(voters, &vote.from.members)
-            })
-            .map(|(vote, voters)| {
-                (vote.clone(), voters.clone())
-            });
-
-        Box::new(iter)
-    }
 
     /// Update valid and current block sets, return set of newly valid blocks to broadcast.
     fn update_valid_blocks(&mut self, vote: &Vote) -> Vec<(Vote, BTreeSet<Name>)> {
-        // Set of valid blocks to branch out from.
-        // Stored as a set of votes where the frontier blocks are the "to" component,
-        // and the nodes that voted for them are held alongside (a little hacky).
-        let mut frontier: BTreeSet<(Vote, BTreeSet<Name>)> = BTreeSet::new();
+        // Update valid blocks.
+        let new_valid_votes = new_valid_blocks(&self.valid_blocks, &self.vote_counts, vote);
+        self.valid_blocks.extend(new_valid_votes.iter().map(|&(ref vote, _)| vote.to.clone()));
 
-        if self.valid_blocks.contains(&vote.from) {
-            // This is a nasty hack...
-            // Should maybe use a Graph type from `petgraph`?
-            let init_vote = Vote { from: vote.from.clone(), to: vote.from.clone() };
-            frontier.insert((init_vote, BTreeSet::new()));
-        } else {
-            return vec![];
-        }
-
-        // Set of new valid votes to broadcast.
-        let mut new_valid_votes = vec![];
-
-        while !frontier.is_empty() {
-            let mut new_frontier = BTreeSet::new();
-
-            for (vote, voters) in frontier {
-                if !self.valid_blocks.contains(&vote.to) {
-                    println!("{}: new valid block: {:?}", self, vote.to);
-                    self.valid_blocks.insert(vote.to.clone());
-                    new_valid_votes.push((vote.clone(), voters));
-
-                    // Update current blocks.
-                    self.add_new_current_block(vote.to.clone());
-                }
-
-                new_frontier.extend(self.successors(&vote.to));
-            }
-
-            frontier = new_frontier;
-        }
+        // Update current blocks.
+        self.update_current_blocks(&new_valid_votes);
 
         new_valid_votes
     }
 
-    /// Add a new current block, removing any blocks that it supersedes.
-    pub fn add_new_current_block(&mut self, new_block: Block) {
-        let mut new_current_blocks = BTreeSet::new();
-        let mut add_new_block = false;
-        let our_name = self.our_name;
+    /// Update the set of current blocks.
+    fn update_current_blocks(&mut self, new_votes: &[(Vote, BTreeSet<Name>)]) {
+        // Any of the existing current blocks or the new valid blocks could be
+        // in the next set of current blocks.
+        let mut potentially_current = vec![];
+        potentially_current.extend(mem::replace(&mut self.current_blocks, btreeset!{}));
+        potentially_current.extend(new_votes.iter().map(|&(ref vote, _)| vote.to.clone()));
 
-        for block in mem::replace(&mut self.current_blocks, BTreeSet::new()) {
-            if new_block.is_admissable_after(&block) {
-                add_new_block = true;
-                println!("Node({}): block no longer current: {:?}", our_name, block);
-            } else {
-                new_current_blocks.insert(block);
-            }
-        }
-
-        if add_new_block {
-            println!("{}: new current block: {:?}", self, new_block);
-            new_current_blocks.insert(new_block);
-        }
-        self.current_blocks = new_current_blocks;
+        mem::replace(&mut self.current_blocks, compute_current_blocks(potentially_current));
     }
 
     /// Update peer states for changes to the set of current blocks.
@@ -358,8 +299,3 @@ impl ActiveNode {
     }
 }
 
-fn is_quorum_of(voters: &BTreeSet<Name>, members: &BTreeSet<Name>) -> bool {
-    let valid_voters: BTreeSet<_> = voters.intersection(members).collect();
-    //assert_eq!(voters.len(), valid_voters.len());
-    valid_voters.len() * 2 > members.len()
-}

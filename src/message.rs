@@ -1,6 +1,5 @@
-use block::Vote;
+use block::{Vote, VoteCounts};
 use name::Name;
-use node::VoteCounts;
 
 use std::collections::BTreeSet;
 

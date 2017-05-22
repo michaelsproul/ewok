@@ -8,57 +8,43 @@ use name::Name;
 use block::Block;
 use message::Message;
 use message::MessageContent::*;
-use params::NodeParams;
+use params::{NodeParams, SimulationParams};
 use random::{random, sample_single, do_with_probability};
 
 pub struct Simulation {
     nodes: BTreeMap<Name, Node>,
     network: Network,
     genesis: Block,
-    max_steps: u64,
+    /// Parameters for the network and the simulation.
+    params: SimulationParams,
     /// Parameters for nodes.
     node_params: NodeParams,
-    /// Probability of a node joining on a given step.
-    prob_join: f64,
-    /// Probability of a node leaving on a given step.
-    prob_drop: f64,
-    /// Step at which is start allowing dropped nodes (gives the network time to start up).
-    drop_step: u64,
     /// Set of connections between nodes. Connections have a direction (from, to).
     connections: BTreeSet<(Name, Name)>,
-    // Probability that a two-way connection will be lost on any given step.
-    // prob_disconnect: f64,
-    // Probability that a lost two-way connection will be re-established on any given step.
-    // prob_reconnect: f64
 }
 
 impl Simulation {
-    // TODO: consider getting rid of "num_nodes" parameter?
-    pub fn new(max_steps: u64, max_delay: u64, num_nodes: u64, prob_join: f64,
-               node_params: NodeParams) -> Self {
-        let mut init_nodes = BTreeMap::new();
+    pub fn new(params: SimulationParams, node_params: NodeParams) -> Self {
+        let mut nodes = BTreeMap::new();
 
         let first_name = random();
         let genesis = Block::genesis(first_name);
         let first_node = Node::first(first_name, genesis.clone(), node_params.clone());
-        init_nodes.insert(first_name, first_node);
+        nodes.insert(first_name, first_node);
 
-        for _ in 0..(num_nodes - 1) {
-            init_nodes.insert(random(), Node::joining());
+        for _ in 0..(params.num_nodes - 1) {
+            nodes.insert(random(), Node::joining());
         }
 
-        let connections = Self::complete_connections(init_nodes.keys().cloned().collect());
+        let connections = Self::complete_connections(nodes.keys().cloned().collect());
+        let network = Network::new(params.max_delay);
 
         Simulation {
-            nodes: init_nodes,
+            nodes,
             genesis,
-            network: Network::new(max_delay),
-            max_steps,
+            network,
+            params,
             node_params,
-            prob_join,
-            // FIXME: parameterise these
-            prob_drop: 0.00,
-            drop_step: max_steps / 3,
             connections
         }
     }
@@ -154,17 +140,17 @@ impl Simulation {
     }
 
     pub fn run(&mut self) {
-        for step in 0..self.max_steps {
+        for step in 0..self.params.num_steps {
             println!("-- step {} --", step);
 
             // Join an existing node if one exists, and it's been long enough since the last join.
-            if do_with_probability(self.prob_join) {
+            if do_with_probability(self.params.prob_join) {
                 let join_messages = self.join_node();
                 self.network.send(step, join_messages);
             }
 
             // Remove an existing node if one exists, and we're past the stabilisation threshold.
-            if step >= self.drop_step && do_with_probability(self.prob_drop) {
+            if step >= self.params.drop_step && do_with_probability(self.params.prob_drop) {
                 let remove_messages = self.drop_node();
                 self.network.send(step, remove_messages);
             }

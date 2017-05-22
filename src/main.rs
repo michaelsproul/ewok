@@ -1,4 +1,7 @@
 extern crate rand;
+extern crate itertools;
+#[macro_use]
+extern crate maplit;
 
 mod block;
 mod message;

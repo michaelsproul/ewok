@@ -1,9 +1,10 @@
 use name::Name;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
 use params::NodeParams;
-
+use block::Block;
 use self::PeerState::*;
+use itertools::Itertools;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum PeerState {
@@ -52,7 +53,7 @@ impl PeerStates {
 
     /// Called when a node becomes current in a single block, but is not valid in all current
     /// blocks.
-    pub fn current_in_some(&mut self, name: Name, step: u64) {
+    pub fn in_some_current(&mut self, name: Name, step: u64) {
         let state = self.states.entry(name).or_insert(PartiallyConfirmed { since: step });
 
         // If this node was previously unconfirmed, mark it confirmed.
@@ -61,8 +62,8 @@ impl PeerStates {
         }
     }
 
-    /// Called when a node becomes current in all current blocks.
-    pub fn current_in_all(&mut self, name: Name, _step: u64) {
+    /// Called when a node appears in all current blocks.
+    pub fn in_all_current(&mut self, name: Name, _step: u64) {
         let state = self.states.entry(name).or_insert(Confirmed);
 
         match *state {
@@ -155,5 +156,46 @@ impl PeerStates {
         }).map(|(name, _)| {
             *name
         }).collect()
+    }
+}
+
+/// Compute the set of nodes that are in all current blocks.
+pub fn in_all_current(current_blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
+    if current_blocks.is_empty() {
+        return BTreeSet::new();
+    }
+
+    current_blocks.iter()
+        .map(|block| block.members.clone())
+        .fold1(|members1, members2| &members1 & &members2)
+        .unwrap()
+}
+
+/// Compute the set of nodes that are in any current block.
+pub fn in_any_current(current_blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
+    current_blocks.iter().fold(BTreeSet::new(), |acc, block| &acc | &block.members)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn current_blocks() {
+        let block = Block::genesis(0);
+
+        let block1 = Block {
+            members: btreeset!{1, 2, 3, 4, 5},
+            ..block.clone()
+        };
+        let block2 = Block {
+            members: btreeset!{1, 3, 5},
+            ..block.clone()
+        };
+
+        let blocks = btreeset!{block1, block2};
+
+        assert_eq!(in_all_current(&blocks), btreeset!{1, 3, 5});
+        assert_eq!(in_any_current(&blocks), btreeset!{1, 2, 3, 4, 5});
     }
 }

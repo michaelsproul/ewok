@@ -1,6 +1,5 @@
 use name::{Prefix, Name};
 
-use std::iter::FromIterator;
 use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -22,7 +21,7 @@ impl Block {
         Block {
             prefix: Prefix::default(),
             version: 0,
-            members: BTreeSet::from_iter(vec![name])
+            members: btreeset!{name}
         }
     }
 

@@ -3,12 +3,13 @@ use message::MessageContent;
 use message::MessageContent::*;
 use name::Name;
 use block::{Block, Vote};
-use peer_state::PeerStates;
+use peer_state::{PeerStates, in_all_current, in_any_current};
 use params::NodeParams;
 
 use std::iter::FromIterator;
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
+use std::fmt;
 
 use self::Node::*;
 
@@ -75,7 +76,6 @@ pub struct ActiveNode {
 
 }
 
-use std::fmt;
 impl fmt::Display for ActiveNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "Node({})", self.our_name)
@@ -184,20 +184,16 @@ impl ActiveNode {
 
     /// Update peer states for changes to the set of current blocks.
     pub fn update_peer_states(&mut self, step: u64) {
-        let current_in_all = self.current_blocks.iter().fold(BTreeSet::new(), |acc, block| {
-            &acc & &block.members
-        });
-        let current_in_any = self.current_blocks.iter().fold(BTreeSet::new(), |acc, block| {
-            &acc | &block.members
-        });
-        let current_in_some = &current_in_any - &current_in_all;
+        let in_all = in_all_current(&self.current_blocks);
+        let in_any = in_any_current(&self.current_blocks);
+        let in_some = &in_any - &in_all;
 
-        for name in current_in_all {
-            self.peer_states.current_in_all(name, step);
+        for name in in_all {
+            self.peer_states.in_all_current(name, step);
         }
 
-        for name in current_in_some {
-            self.peer_states.current_in_some(name, step);
+        for name in in_some {
+            self.peer_states.in_some_current(name, step);
         }
     }
 

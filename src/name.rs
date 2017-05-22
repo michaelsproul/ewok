@@ -26,6 +26,11 @@ trait NameT: Ord {
     /// If `index` exceeds the number of bits in `self`, an unmodified copy of `self` is returned.
     fn with_bit(self, i: usize, bit: bool) -> Self;
 
+    /// Returns a copy of `self`, with the `index`-th bit flipped.
+    ///
+    /// If `index` exceeds the number of bits in `self`, an unmodified copy of `self` is returned.
+    fn with_flipped_bit(self, i: usize) -> Self;
+
     /// Returns a binary format string, with leading zero bits included.
     fn binary(&self) -> String;
 
@@ -58,6 +63,15 @@ impl NameT for u64 {
         } else {
             self &= !pow_i;
         }
+        self
+    }
+
+    fn with_flipped_bit(mut self, i: usize) -> Self {
+        if i >= mem::size_of::<Self>() * 8 {
+            return self;
+        }
+        let pow_i = 1 << (mem::size_of::<Self>() * 8 - 1 - i); // 1 on bit i.
+        self ^= pow_i;
         self
     }
 
@@ -134,6 +148,17 @@ impl Prefix {
     pub fn is_prefix_of(&self, other: Prefix) -> bool {
         let i = self.name.common_prefix(other.name);
         i >= self.bit_count
+    }
+
+    /// Returns `true` if the `other` prefix differs in exactly one bit from this one.
+    pub fn is_neighbour(&self, other: &Prefix) -> bool {
+        let i = self.name.common_prefix(other.name);
+        if i >= self.bit_count() || i >= other.bit_count() {
+            false
+        } else {
+            let j = self.name.with_flipped_bit(i).common_prefix(other.name);
+            j >= self.bit_count() || j >= other.bit_count()
+        }
     }
 
     /// Returns `true` if this is a prefix of the given `name`.

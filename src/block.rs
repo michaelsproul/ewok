@@ -165,6 +165,6 @@ pub fn compute_current_blocks(mut valid_blocks: Vec<Block>) -> CurrentBlocks {
 /// Return true if `voters` form a quorum of `members`.
 pub fn is_quorum_of(voters: &BTreeSet<Name>, members: &BTreeSet<Name>) -> bool {
     let valid_voters = voters & members;
-    //assert_eq!(voters.len(), valid_voters.len());
+    assert_eq!(voters.len(), valid_voters.len());
     valid_voters.len() * 2 > members.len()
 }

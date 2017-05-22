@@ -176,12 +176,18 @@ impl ActiveNode {
         }).collect()
     }
 
+    /// Blocks that we can legitimately vote on successors for, because we are part of them.
+    pub fn our_current_blocks<'a>(&'a self) -> Box<Iterator<Item=&'a Block> + 'a> {
+        let ours = self.current_blocks.iter().filter(move |&b| b.members.contains(&self.our_name));
+        Box::new(ours)
+    }
+
     /// Construct new successor blocks based on our view of the network.
     pub fn construct_new_votes(&self, step: u64) -> Vec<Vote> {
         let mut votes = vec![];
 
         for node in self.peer_states.nodes_to_add(step) {
-            for block in &self.current_blocks {
+            for block in self.our_current_blocks() {
                 if !block.members.contains(&node) {
                     println!("{}: peer {} is missing from current block: {:?}", self, node, block);
                     votes.push(Vote {
@@ -193,7 +199,7 @@ impl ActiveNode {
         }
 
         for node in self.peer_states.nodes_to_drop(step) {
-            for block in &self.current_blocks {
+            for block in self.our_current_blocks() {
                 if block.members.contains(&node) {
                     println!("{}: peer {} should be removed from current block: {:?}",
                              self, node, block);

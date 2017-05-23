@@ -2,8 +2,8 @@ use message::Message;
 use message::MessageContent;
 use message::MessageContent::*;
 use name::Name;
-use block::{Block, Vote, ValidBlocks, CurrentBlocks, VoteCounts,
-            new_valid_blocks, compute_current_blocks, our_blocks};
+use block::{Block, Vote, ValidBlocks, CurrentBlocks, VoteCounts, new_valid_blocks,
+            compute_current_blocks, our_blocks};
 use peer_state::{PeerStates, in_all_current, in_any_current};
 use params::NodeParams;
 use split::split_blocks;
@@ -18,7 +18,7 @@ use self::Node::*;
 pub enum Node {
     WaitingToJoin,
     Dead,
-    Active(ActiveNode)
+    Active(ActiveNode),
 }
 
 impl Node {
@@ -33,14 +33,14 @@ impl Node {
     pub fn is_joining(&self) -> bool {
         match *self {
             WaitingToJoin => true,
-            _ => false
+            _ => false,
         }
     }
 
     pub fn is_active(&self) -> bool {
         match *self {
             Active(..) => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -48,11 +48,7 @@ impl Node {
         *self = Dead;
     }
 
-    pub fn make_active(&mut self,
-                       name: Name,
-                       genesis: Block,
-                       params: NodeParams)
-    {
+    pub fn make_active(&mut self, name: Name, genesis: Block, params: NodeParams) {
         println!("Node({}): starting up!", name);
         *self = Active(ActiveNode::new(name, genesis, params));
     }
@@ -73,7 +69,6 @@ pub struct ActiveNode {
     pub message_filter: BTreeSet<Message>,
     /// Network configuration parameters.
     pub params: NodeParams,
-
 }
 
 impl fmt::Display for ActiveNode {
@@ -91,7 +86,7 @@ impl ActiveNode {
             vote_counts: BTreeMap::new(),
             peer_states: PeerStates::new(params.clone()),
             message_filter: BTreeSet::new(),
-            params
+            params,
         }
     }
 
@@ -102,9 +97,11 @@ impl ActiveNode {
 
     /// Insert a vote into our local cache of votes.
     fn add_vote_to_cache<I>(&mut self, vote: Vote, voted_for: I)
-        where I: IntoIterator<Item=Name>
+        where I: IntoIterator<Item = Name>
     {
-        let voters = self.vote_counts.entry(vote).or_insert_with(BTreeSet::new);
+        let voters = self.vote_counts
+            .entry(vote)
+            .or_insert_with(BTreeSet::new);
         voters.extend(voted_for);
     }
 
@@ -112,7 +109,10 @@ impl ActiveNode {
     fn update_valid_blocks(&mut self, vote: &Vote) -> Vec<(Vote, BTreeSet<Name>)> {
         // Update valid blocks.
         let new_valid_votes = new_valid_blocks(&self.valid_blocks, &self.vote_counts, vote);
-        self.valid_blocks.extend(new_valid_votes.iter().map(|&(ref vote, _)| vote.to.clone()));
+        self.valid_blocks
+            .extend(new_valid_votes
+                        .iter()
+                        .map(|&(ref vote, _)| vote.to.clone()));
 
         // Update current blocks.
         self.update_current_blocks(&new_valid_votes);
@@ -128,7 +128,8 @@ impl ActiveNode {
         potentially_current.extend(mem::replace(&mut self.current_blocks, btreeset!{}));
         potentially_current.extend(new_votes.iter().map(|&(ref vote, _)| vote.to.clone()));
 
-        mem::replace(&mut self.current_blocks, compute_current_blocks(potentially_current));
+        mem::replace(&mut self.current_blocks,
+                     compute_current_blocks(potentially_current));
         //println!("{}: we have {} current blocks", self, self.current_blocks.len());
     }
 
@@ -149,7 +150,7 @@ impl ActiveNode {
 
     /// Add a block to our local cache, and update our current and valid blocks.
     pub fn add_vote<I>(&mut self, vote: Vote, voted_for: I) -> Vec<Message>
-        where I: IntoIterator<Item=Name>
+        where I: IntoIterator<Item = Name>
     {
         // Add vote to cache.
         self.add_vote_to_cache(vote.clone(), voted_for);
@@ -164,7 +165,8 @@ impl ActiveNode {
     /// Return all neighbours we're connected to (or should be connected to).
     // TODO: will need adjusting once we have multiple sections.
     pub fn neighbouring_nodes(&self) -> BTreeSet<Name> {
-        let mut res: BTreeSet<_> = self.current_blocks.iter()
+        let mut res: BTreeSet<_> = self.current_blocks
+            .iter()
             .flat_map(|block| block.members.clone())
             .collect();
         res.extend(self.peer_states.all_peers());
@@ -174,19 +176,23 @@ impl ActiveNode {
 
     /// Create messages for every relevant neighbour for every vote in the given vec.
     pub fn broadcast(&self, msgs: Vec<MessageContent>) -> Vec<Message> {
-        self.neighbouring_nodes().into_iter().flat_map(|neighbour| {
-            msgs.iter().map(move |content| {
-                Message {
-                    sender: self.our_name,
-                    recipient: neighbour,
-                    content: content.clone()
-                }
+        self.neighbouring_nodes()
+            .into_iter()
+            .flat_map(|neighbour| {
+                msgs.iter()
+                    .map(move |content| {
+                             Message {
+                                 sender: self.our_name,
+                                 recipient: neighbour,
+                                 content: content.clone(),
+                             }
+                         })
             })
-        }).collect()
+            .collect()
     }
 
     /// Blocks that we can legitimately vote on successors for, because we are part of them.
-    pub fn our_current_blocks<'a>(&'a self) -> Box<Iterator<Item=&'a Block> + 'a> {
+    pub fn our_current_blocks<'a>(&'a self) -> Box<Iterator<Item = &'a Block> + 'a> {
         our_blocks(&self.current_blocks, self.our_name)
     }
 
@@ -202,11 +208,14 @@ impl ActiveNode {
         for node in self.peer_states.nodes_to_add(step) {
             for block in self.our_current_blocks() {
                 if Self::could_be_added(node, block) {
-                    println!("{}: peer {} is missing from current block: {:?}", self, node, block);
+                    println!("{}: peer {} is missing from current block: {:?}",
+                             self,
+                             node,
+                             block);
                     votes.push(Vote {
-                        from: block.clone(),
-                        to: block.add_node(node)
-                    });
+                                   from: block.clone(),
+                                   to: block.add_node(node),
+                               });
                 }
             }
         }
@@ -215,11 +224,13 @@ impl ActiveNode {
             for block in self.our_current_blocks() {
                 if block.members.contains(&node) {
                     println!("{}: peer {} should be removed from current block: {:?}",
-                             self, node, block);
+                             self,
+                             node,
+                             block);
                     votes.push(Vote {
-                        from: block.clone(),
-                        to: block.remove_node(node)
-                    });
+                                   from: block.clone(),
+                                   to: block.remove_node(node),
+                               });
                 }
             }
         }
@@ -257,7 +268,7 @@ impl ActiveNode {
         Message {
             sender: self.our_name,
             recipient: joining_node,
-            content: BootstrapMsg(self.vote_counts.clone())
+            content: BootstrapMsg(self.vote_counts.clone()),
         }
     }
 
@@ -285,28 +296,33 @@ impl ActiveNode {
                 let mut messages = self.broadcast_new_votes(step);
                 messages.push(self.construct_bootstrap_msg(joining_node));
                 messages
-            },
+            }
             VoteMsg(vote) => {
                 println!("{}: received {:?} from {}", self, vote, message.sender);
                 let mut msgs = self.add_vote(vote, Some(message.sender));
                 msgs.extend(self.broadcast_new_votes(step));
                 msgs
-            },
+            }
             VoteAgreedMsg((vote, voters)) => {
-                println!("{}: received agreement for {:?} from {}", self, vote, message.sender);
+                println!("{}: received agreement for {:?} from {}",
+                         self,
+                         vote,
+                         message.sender);
                 let mut msgs = self.add_vote(vote, voters);
                 msgs.extend(self.broadcast_new_votes(step));
                 msgs
-            },
+            }
             BootstrapMsg(vote_counts) => {
-                println!("{}: applying bootstrap message from {}", self, message.sender);
+                println!("{}: applying bootstrap message from {}",
+                         self,
+                         message.sender);
                 self.apply_bootstrap_msg(vote_counts)
             }
             ConnectionLost => {
                 println!("{}: lost our connection to {}", self, message.sender);
                 self.peer_states.disconnected(message.sender, step);
                 self.broadcast_new_votes(step)
-            },
+            }
             ConnectionRegained => {
                 println!("{}: regained our connection to {}", self, message.sender);
                 self.peer_states.reconnected(message.sender, step);
@@ -319,4 +335,3 @@ impl ActiveNode {
         to_send
     }
 }
-

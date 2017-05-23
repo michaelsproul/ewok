@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 pub struct Message {
     pub sender: Name,
     pub recipient: Name,
-    pub content: MessageContent
+    pub content: MessageContent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

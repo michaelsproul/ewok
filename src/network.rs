@@ -12,7 +12,7 @@ pub struct Network {
     /// Probability that a message is delivered on a given step.
     prob_deliver: f64,
     /// Map from step # to messages inserted at that step.
-    messages: BTreeMap<u64, Vec<Message>>
+    messages: BTreeMap<u64, Vec<Message>>,
 }
 
 impl Network {
@@ -20,7 +20,7 @@ impl Network {
         Network {
             max_delay,
             prob_deliver: Self::delivery_probability(max_delay),
-            messages: BTreeMap::new()
+            messages: BTreeMap::new(),
         }
     }
 
@@ -40,15 +40,18 @@ impl Network {
 
         let prob_deliver = self.prob_deliver;
 
-        self.messages.range_mut(start_step..step)
+        self.messages
+            .range_mut(start_step..step)
             .flat_map(|(&step_sent, messages)| {
                 // Partition randomly based on p, whilst also delivering any messages
                 // which were sent at start step.
-                let (deliver, leave) = messages.drain(..).partition(|_| {
-                    let deliver_random = random::<f64>() <= prob_deliver;
-                    let force_deliver = step_sent == start_step;
-                    force_deliver || deliver_random
-                });
+                let (deliver, leave) = messages
+                    .drain(..)
+                    .partition(|_| {
+                                   let deliver_random = random::<f64>() <= prob_deliver;
+                                   let force_deliver = step_sent == start_step;
+                                   force_deliver || deliver_random
+                               });
 
                 *messages = leave;
                 deliver

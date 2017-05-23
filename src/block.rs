@@ -1,5 +1,4 @@
 use name::{Prefix, Name};
-use util::abs_diff;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -60,17 +59,24 @@ impl Block {
 
         // Add/remove case.
         if self.prefix == other.prefix {
-            abs_diff(self.members.len(), other.members.len()) == 1
+            self.members
+                .symmetric_difference(&other.members)
+                .count() == 1
         }
         // Split case.
         else if self.prefix.popped() == other.prefix {
-            // TODO: check prefix matches members.
-            true
+            let filtered = other
+                .members
+                .iter()
+                .filter(|name| self.prefix.matches(**name));
+            self.members.iter().eq(filtered)
         }
         // Merge case
         else if other.prefix.popped() == self.prefix {
-            // TODO
-            false
+            let filtered = self.members
+                .iter()
+                .filter(|name| other.prefix.matches(**name));
+            other.members.iter().eq(filtered)
         } else {
             false
         }

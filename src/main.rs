@@ -14,7 +14,6 @@ mod peer_state;
 mod random;
 mod simulation;
 mod split;
-mod util;
 
 use simulation::Simulation;
 use params::{SimulationParams, NodeParams};

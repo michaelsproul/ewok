@@ -26,6 +26,7 @@ fn main() {
         prob_join: 0.1,
         prob_drop: 0.01,
         drop_step: 150,
+        prob_disconnect: 0.01,
     };
 
     let node_params = NodeParams {

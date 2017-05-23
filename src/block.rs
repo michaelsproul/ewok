@@ -85,9 +85,9 @@ impl Block {
 
 /// Compute the set of blocks that become valid as a result of adding `new_vote`.
 ///
-/// * valid_blocks: the set of valid blocks.
-/// * vote_counts: the vote counts, including the vote for `new_vote` that was just added.
-/// * new_vote: a vote that just voted for by a node.
+/// * `valid_blocks`: the set of valid blocks.
+/// * `vote_counts`: the vote counts, including the vote for `new_vote` that was just added.
+/// * `new_vote`: a vote that just voted for by a node.
 ///
 /// Return value:
 /// Set of votes that become valid as a result of `new_vote`. The `to` blocks of these

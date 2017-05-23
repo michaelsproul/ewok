@@ -20,16 +20,16 @@ use params::{SimulationParams, NodeParams};
 
 fn main() {
     let params = SimulationParams {
-        num_nodes: 20,
-        num_steps: 1000,
+        num_nodes: 24,
+        num_steps: 5000,
         max_delay: 5,
         prob_join: 0.1,
         prob_drop: 0.00,
-        drop_step: 30
+        drop_step: 100
     };
 
     let node_params = NodeParams {
-        join_stabilisation_timeout: 50
+        join_timeout: 50
     };
 
     let mut simulation = Simulation::new(params, node_params);

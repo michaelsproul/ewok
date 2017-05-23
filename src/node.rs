@@ -122,6 +122,7 @@ impl ActiveNode {
         potentially_current.extend(new_votes.iter().map(|&(ref vote, _)| vote.to.clone()));
 
         mem::replace(&mut self.current_blocks, compute_current_blocks(potentially_current));
+        //println!("{}: we have {} current blocks", self, self.current_blocks.len());
     }
 
     /// Update peer states for changes to the set of current blocks.
@@ -212,7 +213,7 @@ impl ActiveNode {
         }
 
         // TODO: parametrise by min_split_size
-        votes.extend(split_blocks(&self.current_blocks, self.our_name, 2));
+        votes.extend(split_blocks(&self.current_blocks, self.our_name, 6));
 
         votes
     }

@@ -17,7 +17,7 @@ enum PeerState {
     },
     /// Waiting to join, has not yet been included in a current block.
     Unconfirmed {
-        since: u64,
+        join_step: u64,
     },
     /// Currently disconnected from us.
     Disconnected {
@@ -48,7 +48,8 @@ impl PeerStates {
 
     /// Called when we see a NodeJoined message.
     pub fn node_joined(&mut self, name: Name, step: u64) {
-        self.states.entry(name).or_insert(Unconfirmed { since: step });
+        // FIXME: limit to one candidate at a time.
+        self.states.entry(name).or_insert(Unconfirmed { join_step: step });
     }
 
     /// Called when a node becomes current in a single block, but is not valid in all current
@@ -56,9 +57,13 @@ impl PeerStates {
     pub fn in_some_current(&mut self, name: Name, step: u64) {
         let state = self.states.entry(name).or_insert(PartiallyConfirmed { since: step });
 
-        // If this node was previously unconfirmed, mark it confirmed.
-        if let Unconfirmed { .. } = *state {
-            *state = PartiallyConfirmed { since: step };
+        match *state {
+            // Previously unconfirmed, upgrade to partially confirmed.
+            // Previously confirmed, downgrade to partially confirmed.
+            Unconfirmed { .. } | Confirmed => {
+                *state = PartiallyConfirmed { since: step };
+            }
+            _ => ()
         }
     }
 
@@ -121,15 +126,18 @@ impl PeerStates {
     }
 
     /// Return all unconfirmed or partially confirmed nodes who we should keep trying to add.
-    /// TODO: implement "nodes that already appear in a current section and are connected to us,
-    /// and that at least once in the past 60 seconds have not been missing from any current
-    /// section."
     pub fn nodes_to_add(&self, step: u64) -> Vec<Name> {
         self.states.iter().filter(|&(_, state)| {
             match *state {
-                PartiallyConfirmed { since } | Unconfirmed { since } => {
-                    since >= step.saturating_sub(self.params.join_stabilisation_timeout)
+                // rule:AddRP
+                // candidate passed our resource proof in the last `join_timeout` steps.
+                Unconfirmed { join_step } => {
+                    join_step >= step.saturating_sub(self.params.join_timeout)
                 }
+                // rule:AddConv
+                // nodes that appear in some current blocks but not all
+                PartiallyConfirmed { .. } => true,
+                // anything else
                 _ => false
             }
         }).map(|(name, _)| {
@@ -137,20 +145,12 @@ impl PeerStates {
         }).collect()
     }
 
-    /// Return all nodes that we should vote to remove because we are disconnected from them
-    /// or are not yet part of all current sections.
-    pub fn nodes_to_drop(&self, step: u64) -> Vec<Name> {
+    /// Return all nodes that we should vote to remove.
+    pub fn nodes_to_drop(&self, _step: u64) -> Vec<Name> {
         self.states.iter().filter(|&(_, state)| {
             match *state {
-                // Remove rule, part 1.
-                Disconnected { .. } => {
-                    // TODO: use a timeout here?
-                    true
-                }
-                // Remove rule, part 2.
-                PartiallyConfirmed { since } | Unconfirmed { since } => {
-                    since < step.saturating_sub(self.params.join_stabilisation_timeout)
-                }
+                // rule:RmDc
+                Disconnected { .. } => true,
                 _ => false
             }
         }).map(|(name, _)| {

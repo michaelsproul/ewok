@@ -29,6 +29,8 @@ fn main() {
     };
 
     let node_params = NodeParams {
+        min_section_size: 4,
+        split_buffer: 0,
         join_timeout: 50
     };
 

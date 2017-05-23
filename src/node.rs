@@ -71,6 +71,8 @@ pub struct ActiveNode {
     pub peer_states: PeerStates,
     /// Filter for messages we've already sent and shouldn't resend.
     pub message_filter: BTreeSet<Message>,
+    /// Network configuration parameters.
+    pub params: NodeParams,
 
 }
 
@@ -87,9 +89,15 @@ impl ActiveNode {
             valid_blocks: BTreeSet::from_iter(vec![genesis.clone()]),
             current_blocks: BTreeSet::from_iter(vec![genesis]),
             vote_counts: BTreeMap::new(),
-            peer_states: PeerStates::new(params),
-            message_filter: BTreeSet::new()
+            peer_states: PeerStates::new(params.clone()),
+            message_filter: BTreeSet::new(),
+            params
         }
+    }
+
+    /// Minimum size that all sections must be before splitting.
+    fn min_split_size(&self) -> usize {
+        self.params.min_section_size as usize + self.params.split_buffer as usize
     }
 
     /// Insert a vote into our local cache of votes.
@@ -99,7 +107,6 @@ impl ActiveNode {
         let voters = self.vote_counts.entry(vote).or_insert_with(BTreeSet::new);
         voters.extend(voted_for);
     }
-
 
     /// Update valid and current block sets, return set of newly valid blocks to broadcast.
     fn update_valid_blocks(&mut self, vote: &Vote) -> Vec<(Vote, BTreeSet<Name>)> {
@@ -217,8 +224,7 @@ impl ActiveNode {
             }
         }
 
-        // TODO: parametrise by min_split_size
-        votes.extend(split_blocks(&self.current_blocks, self.our_name, 4));
+        votes.extend(split_blocks(&self.current_blocks, self.our_name, self.min_split_size()));
 
         votes
     }

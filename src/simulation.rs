@@ -46,18 +46,18 @@ impl Simulation {
             network,
             params,
             node_params,
-            connections
+            connections,
         }
     }
 
-    fn active_nodes<'a>(&'a self) -> Box<Iterator<Item=(&'a Name, &'a Node)> + 'a> {
-        let active_nodes = self.nodes.iter()
-            .filter(|&(_, node)| node.is_active());
+    fn active_nodes<'a>(&'a self) -> Box<Iterator<Item = (&'a Name, &'a Node)> + 'a> {
+        let active_nodes = self.nodes.iter().filter(|&(_, node)| node.is_active());
         Box::new(active_nodes)
     }
 
     fn find_joining_node(&self) -> Option<Name> {
-        let joining_nodes = self.nodes.iter()
+        let joining_nodes = self.nodes
+            .iter()
             .filter(|&(_, node)| node.is_joining())
             .map(|(name, _)| *name);
 
@@ -68,22 +68,27 @@ impl Simulation {
     pub fn join_node(&mut self) -> Vec<Message> {
         let joining = match self.find_joining_node() {
             Some(name) => name,
-            None => return vec![]
+            None => return vec![],
         };
 
         // TODO: send only to this node's section (for now, send to the whole network).
-        let messages = self.active_nodes().map(|(&neighbour, _)| {
-            Message {
-                sender: joining,
-                recipient: neighbour,
-                content: NodeJoined
-            }
-        }).collect();
+        let messages = self.active_nodes()
+            .map(|(&neighbour, _)| {
+                     Message {
+                         sender: joining,
+                         recipient: neighbour,
+                         content: NodeJoined,
+                     }
+                 })
+            .collect();
 
         // Make the node active, and let it build its way up from the genesis block.
         let genesis = self.genesis.clone();
         let params = self.node_params.clone();
-        self.nodes.get_mut(&joining).unwrap().make_active(joining, genesis, params);
+        self.nodes
+            .get_mut(&joining)
+            .unwrap()
+            .make_active(joining, genesis, params);
 
         messages
     }
@@ -92,7 +97,7 @@ impl Simulation {
     pub fn drop_node(&mut self) -> Vec<Message> {
         let leaving_node = match sample_single(self.active_nodes()) {
             Some((name, _)) => *name,
-            None => return vec![]
+            None => return vec![],
         };
 
         println!("Node({}): dying...", leaving_node);
@@ -104,13 +109,15 @@ impl Simulation {
         self.nodes.get_mut(&leaving_node).unwrap().kill();
 
         // Send disconnect messages.
-        self.active_nodes().map(|(&neighbour, _)| {
-            Message {
-                sender: leaving_node,
-                recipient: neighbour,
-                content: ConnectionLost
-            }
-        }).collect()
+        self.active_nodes()
+            .map(|(&neighbour, _)| {
+                     Message {
+                         sender: leaving_node,
+                         recipient: neighbour,
+                         content: ConnectionLost,
+                     }
+                 })
+            .collect()
     }
 
     fn complete_connections(names: Vec<Name>) -> BTreeSet<(Name, Name)> {
@@ -137,7 +144,8 @@ impl Simulation {
 
     fn message_allowed(&self, message: &Message) -> bool {
         message.content == ConnectionLost ||
-        self.connections.contains(&(message.sender, message.recipient))
+        self.connections
+            .contains(&(message.sender, message.recipient))
     }
 
     /// Run the simulation, returning Ok iff the network was consistent upon termination.
@@ -173,7 +181,7 @@ impl Simulation {
                     Dead => {
                         println!("dropping message for dead node {}", message.recipient);
                     }
-                    WaitingToJoin => panic!("invalid")
+                    WaitingToJoin => panic!("invalid"),
                 }
             }
         }
@@ -184,7 +192,7 @@ impl Simulation {
                 Active(ref node) => {
                     println!("{}: current_blocks: {:#?}", node, node.current_blocks);
                 }
-                _ => ()
+                _ => (),
             }
         }
 

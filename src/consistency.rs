@@ -10,7 +10,9 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>) -> Result<(), ()> {
     for node in nodes.values() {
         if let Active(ref active_node) = *node {
             for block in &active_node.current_blocks {
-                let section_versions = sections.entry(block.prefix).or_insert_with(BTreeSet::new);
+                let section_versions = sections
+                    .entry(block.prefix)
+                    .or_insert_with(BTreeSet::new);
                 section_versions.insert(block.clone());
             }
         }
@@ -21,7 +23,9 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>) -> Result<(), ()> {
     for (prefix, versions) in &sections {
         if versions.len() > 1 {
             failed = true;
-            println!("multiple versions of {:?}, they are: {:#?}", prefix, versions);
+            println!("multiple versions of {:?}, they are: {:#?}",
+                     prefix,
+                     versions);
         }
     }
 

@@ -7,23 +7,19 @@ thread_local! {
 
 /// Random value from the thread-local weak RNG.
 pub fn random<T: Rand>() -> T {
-    WEAK_RNG.with(|rng| {
-        rng.borrow_mut().gen()
-    })
+    WEAK_RNG.with(|rng| rng.borrow_mut().gen())
 }
 
 /// Sample values from an iterator.
 pub fn sample<T, I>(iterable: I, amount: usize) -> Vec<T>
-    where I: IntoIterator<Item=T>
+    where I: IntoIterator<Item = T>
 {
-    WEAK_RNG.with(|rng| {
-        rand::sample(&mut *rng.borrow_mut(), iterable, amount)
-    })
+    WEAK_RNG.with(|rng| rand::sample(&mut *rng.borrow_mut(), iterable, amount))
 }
 
 /// Sample a single value from an iterator.
 pub fn sample_single<T, I>(iterable: I) -> Option<T>
-    where I: IntoIterator<Item=T>
+    where I: IntoIterator<Item = T>
 {
     sample(iterable, 1).pop()
 }

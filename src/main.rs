@@ -14,7 +14,6 @@ mod peer_state;
 mod random;
 mod simulation;
 mod split;
-mod util;
 
 use simulation::Simulation;
 use params::{SimulationParams, NodeParams};
@@ -26,13 +25,13 @@ fn main() {
         max_delay: 50,
         prob_join: 0.1,
         prob_drop: 0.01,
-        drop_step: 150
+        drop_step: 150,
     };
 
     let node_params = NodeParams {
         min_section_size: 4,
         split_buffer: 0,
-        join_timeout: 80
+        join_timeout: 80,
     };
 
     let mut simulation = Simulation::new(params, node_params);

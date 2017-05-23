@@ -13,31 +13,29 @@ enum PeerState {
     /// Appeared in at least one current block at some point.
     PartiallyConfirmed {
         // Step that the node first appeared in a current block.
-        since: u64
+        since: u64,
     },
     /// Waiting to join, has not yet been included in a current block.
-    Unconfirmed {
-        join_step: u64,
-    },
+    Unconfirmed { join_step: u64 },
     /// Currently disconnected from us.
     Disconnected {
         since: u64,
-        previous_state: Box<PeerState>
-    }
+        previous_state: Box<PeerState>,
+    },
 }
 
 pub struct PeerStates {
     /// States of known peers.
     states: BTreeMap<Name, PeerState>,
     /// Parameters like timeouts, etc.
-    params: NodeParams
+    params: NodeParams,
 }
 
 impl PeerStates {
     pub fn new(params: NodeParams) -> Self {
         PeerStates {
             states: BTreeMap::new(),
-            params
+            params,
         }
     }
 
@@ -49,21 +47,26 @@ impl PeerStates {
     /// Called when we see a NodeJoined message.
     pub fn node_joined(&mut self, name: Name, step: u64) {
         // FIXME: limit to one candidate at a time.
-        self.states.entry(name).or_insert(Unconfirmed { join_step: step });
+        self.states
+            .entry(name)
+            .or_insert(Unconfirmed { join_step: step });
     }
 
     /// Called when a node becomes current in a single block, but is not valid in all current
     /// blocks.
     pub fn in_some_current(&mut self, name: Name, step: u64) {
-        let state = self.states.entry(name).or_insert(PartiallyConfirmed { since: step });
+        let state = self.states
+            .entry(name)
+            .or_insert(PartiallyConfirmed { since: step });
 
         match *state {
             // Previously unconfirmed, upgrade to partially confirmed.
             // Previously confirmed, downgrade to partially confirmed.
-            Unconfirmed { .. } | Confirmed => {
+            Unconfirmed { .. } |
+            Confirmed => {
                 *state = PartiallyConfirmed { since: step };
             }
-            _ => ()
+            _ => (),
         }
     }
 
@@ -72,10 +75,11 @@ impl PeerStates {
         let state = self.states.entry(name).or_insert(Confirmed);
 
         match *state {
-            PartiallyConfirmed { .. } | Unconfirmed { .. } => {
+            PartiallyConfirmed { .. } |
+            Unconfirmed { .. } => {
                 *state = Confirmed;
             }
-            _ => ()
+            _ => (),
         }
     }
 
@@ -98,7 +102,7 @@ impl PeerStates {
             _ => {
                 *state = Disconnected {
                     since: step,
-                    previous_state: Box::new(state.clone())
+                    previous_state: Box::new(state.clone()),
                 };
             }
         };
@@ -127,35 +131,39 @@ impl PeerStates {
 
     /// Return all unconfirmed or partially confirmed nodes who we should keep trying to add.
     pub fn nodes_to_add(&self, step: u64) -> Vec<Name> {
-        self.states.iter().filter(|&(_, state)| {
-            match *state {
-                // rule:AddRP
-                // candidate passed our resource proof in the last `join_timeout` steps.
-                Unconfirmed { join_step } => {
-                    join_step >= step.saturating_sub(self.params.join_timeout)
+        self.states
+            .iter()
+            .filter(|&(_, state)| {
+                match *state {
+                    // rule:AddRP
+                    // candidate passed our resource proof in the last `join_timeout` steps.
+                    Unconfirmed { join_step } => {
+                        join_step >= step.saturating_sub(self.params.join_timeout)
+                    }
+                    // rule:AddConv
+                    // nodes that appear in some current blocks but not all
+                    PartiallyConfirmed { .. } => true,
+                    // anything else
+                    _ => false,
                 }
-                // rule:AddConv
-                // nodes that appear in some current blocks but not all
-                PartiallyConfirmed { .. } => true,
-                // anything else
-                _ => false
-            }
-        }).map(|(name, _)| {
-            *name
-        }).collect()
+            })
+            .map(|(name, _)| *name)
+            .collect()
     }
 
     /// Return all nodes that we should vote to remove.
     pub fn nodes_to_drop(&self, _step: u64) -> Vec<Name> {
-        self.states.iter().filter(|&(_, state)| {
-            match *state {
-                // rule:RmDc
-                Disconnected { .. } => true,
-                _ => false
-            }
-        }).map(|(name, _)| {
-            *name
-        }).collect()
+        self.states
+            .iter()
+            .filter(|&(_, state)| {
+                        match *state {
+                            // rule:RmDc
+                            Disconnected { .. } => true,
+                            _ => false,
+                        }
+                    })
+            .map(|(name, _)| *name)
+            .collect()
     }
 }
 
@@ -165,7 +173,8 @@ pub fn in_all_current(current_blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
         return BTreeSet::new();
     }
 
-    current_blocks.iter()
+    current_blocks
+        .iter()
         .map(|block| block.members.clone())
         .fold1(|members1, members2| &members1 & &members2)
         .unwrap()
@@ -173,7 +182,9 @@ pub fn in_all_current(current_blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
 
 /// Compute the set of nodes that are in any current block.
 pub fn in_any_current(current_blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
-    current_blocks.iter().fold(BTreeSet::new(), |acc, block| &acc | &block.members)
+    current_blocks
+        .iter()
+        .fold(BTreeSet::new(), |acc, block| &acc | &block.members)
 }
 
 #[cfg(test)]

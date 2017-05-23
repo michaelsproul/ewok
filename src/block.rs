@@ -1,5 +1,4 @@
 use name::{Prefix, Name};
-use util::abs_diff;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -7,13 +6,13 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct Block {
     pub prefix: Prefix,
     pub version: u64,
-    pub members: BTreeSet<Name>
+    pub members: BTreeSet<Name>,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Vote {
     pub from: Block,
-    pub to: Block
+    pub to: Block,
 }
 
 pub type ValidBlocks = BTreeSet<Block>;
@@ -26,7 +25,7 @@ impl Block {
         Block {
             prefix: Prefix::default(),
             version: 0,
-            members: btreeset!{name}
+            members: btreeset!{name},
         }
     }
 
@@ -37,7 +36,7 @@ impl Block {
         Block {
             prefix: self.prefix,
             version: self.version + 1,
-            members
+            members,
         }
     }
 
@@ -48,29 +47,36 @@ impl Block {
         Block {
             prefix: self.prefix,
             version: self.version + 1,
-            members
+            members,
         }
     }
 
-    // Is this block admissable after the given other block?
-    pub fn is_admissable_after(&self, other: &Block) -> bool {
+    /// Is this block admissible after the given other block?
+    pub fn is_admissible_after(&self, other: &Block) -> bool {
         if self.version <= other.version {
             return false;
         }
 
         // Add/remove case.
         if self.prefix == other.prefix {
-            abs_diff(self.members.len(), other.members.len()) == 1
+            self.members
+                .symmetric_difference(&other.members)
+                .count() == 1
         }
         // Split case.
         else if self.prefix.popped() == other.prefix {
-            // TODO: check prefix matches members.
-            true
+            let filtered = other
+                .members
+                .iter()
+                .filter(|name| self.prefix.matches(**name));
+            self.members.iter().eq(filtered)
         }
         // Merge case
         else if other.prefix.popped() == self.prefix {
-            // TODO
-            false
+            let filtered = self.members
+                .iter()
+                .filter(|name| other.prefix.matches(**name));
+            other.members.iter().eq(filtered)
         } else {
             false
         }
@@ -88,7 +94,8 @@ impl Block {
 /// votes are the new valid blocks that should be added to `valid_blocks`.
 pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
                         vote_counts: &VoteCounts,
-                        new_vote: &Vote) -> Vec<(Vote, BTreeSet<Name>)> {
+                        new_vote: &Vote)
+                        -> Vec<(Vote, BTreeSet<Name>)> {
     // Set of valid blocks to branch out from.
     // Stored as a set of votes where the frontier blocks are the "to" component,
     // and the nodes that voted for them are held alongside (a little hacky).
@@ -101,7 +108,10 @@ pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
     // so we can branch out from it.
     if valid_blocks.contains(&new_vote.from) {
         // This dummy vote is a bit of hack, we really just need init_vote.to = new_vote.from.
-        let init_vote = Vote { from: new_vote.from.clone(), to: new_vote.from.clone() };
+        let init_vote = Vote {
+            from: new_vote.from.clone(),
+            to: new_vote.from.clone(),
+        };
         frontier.insert((init_vote, BTreeSet::new()));
     } else {
         return new_valid_votes;
@@ -130,22 +140,15 @@ pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
 ///
 /// a succeeds b == b witnesses a.
 fn successors<'a>(vote_counts: &'a VoteCounts,
-                  from: &'a Block) -> Box<Iterator<Item=(Vote, BTreeSet<Name>)> + 'a>
-{
+                  from: &'a Block)
+                  -> Box<Iterator<Item = (Vote, BTreeSet<Name>)> + 'a> {
     // TODO: could be more efficient with look-up by `from` block.
-    let iter = vote_counts.iter()
-        .filter(move |&(vote, _)| {
-            &vote.from == from
-        })
-        .filter(|&(vote, _)| {
-            vote.to.is_admissable_after(&vote.from)
-        })
-        .filter(|&(vote, voters)| {
-            is_quorum_of(voters, &vote.from.members)
-        })
-        .map(|(vote, voters)| {
-            (vote.clone(), voters.clone())
-        });
+    let iter = vote_counts
+        .iter()
+        .filter(move |&(vote, _)| &vote.from == from)
+        .filter(|&(vote, _)| vote.to.is_admissible_after(&vote.from))
+        .filter(|&(vote, voters)| is_quorum_of(voters, &vote.from.members))
+        .map(|(vote, voters)| (vote.clone(), voters.clone()));
 
     Box::new(iter)
 }
@@ -161,14 +164,17 @@ pub fn compute_current_blocks(mut valid_blocks: Vec<Block>) -> CurrentBlocks {
     // or the same version as a prefix we have covered.
     for block in valid_blocks {
         let is_current = {
-            let compatible: Vec<_> = current_blocks.iter().filter(|current: &&Block| {
-                current.prefix.is_compatible(block.prefix)
-            }).collect();
+            let compatible: Vec<_> = current_blocks
+                .iter()
+                .filter(|current: &&Block| current.prefix.is_compatible(block.prefix))
+                .collect();
 
             if compatible.is_empty() {
                 true
             } else {
-                compatible.iter().any(|current| block.version == current.version)
+                compatible
+                    .iter()
+                    .any(|current| block.version == current.version)
             }
         };
 
@@ -188,9 +194,11 @@ pub fn is_quorum_of(voters: &BTreeSet<Name>, members: &BTreeSet<Name>) -> bool {
 }
 
 /// Blocks that we can legitimately vote on successors for, because we are part of them.
-pub fn our_blocks<'a>(blocks: &'a BTreeSet<Block>, our_name: Name)
-    -> Box<Iterator<Item=&'a Block> + 'a>
-{
-    let ours = blocks.iter().filter(move |b| b.members.contains(&our_name));
+pub fn our_blocks<'a>(blocks: &'a BTreeSet<Block>,
+                      our_name: Name)
+                      -> Box<Iterator<Item = &'a Block> + 'a> {
+    let ours = blocks
+        .iter()
+        .filter(move |b| b.members.contains(&our_name));
     Box::new(ours)
 }

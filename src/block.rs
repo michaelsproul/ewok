@@ -52,8 +52,8 @@ impl Block {
         }
     }
 
-    // Is this block admissable after the given other block?
-    pub fn is_admissable_after(&self, other: &Block) -> bool {
+    /// Is this block admissible after the given other block?
+    pub fn is_admissible_after(&self, other: &Block) -> bool {
         if self.version <= other.version {
             return false;
         }
@@ -140,7 +140,7 @@ fn successors<'a>(vote_counts: &'a VoteCounts,
     let iter = vote_counts
         .iter()
         .filter(move |&(vote, _)| &vote.from == from)
-        .filter(|&(vote, _)| vote.to.is_admissable_after(&vote.from))
+        .filter(|&(vote, _)| vote.to.is_admissible_after(&vote.from))
         .filter(|&(vote, voters)| is_quorum_of(voters, &vote.from.members))
         .map(|(vote, voters)| (vote.clone(), voters.clone()));
 

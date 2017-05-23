@@ -10,7 +10,7 @@ use consistency::check_consistency;
 use message::Message;
 use message::MessageContent::*;
 use params::{NodeParams, SimulationParams};
-use random::{random, sample_single, do_with_probability};
+use random::{random, sample, sample_single, do_with_probability};
 
 pub struct Simulation {
     nodes: BTreeMap<Name, Node>,
@@ -65,7 +65,7 @@ impl Simulation {
     }
 
     /// Choose a currently waiting node and start its join process.
-    pub fn join_node(&mut self) -> Vec<Message> {
+    fn join_node(&mut self) -> Vec<Message> {
         let joining = match self.find_joining_node() {
             Some(name) => name,
             None => return vec![],
@@ -94,7 +94,7 @@ impl Simulation {
     }
 
     /// Drop an existing node if one exists to drop.
-    pub fn drop_node(&mut self) -> Vec<Message> {
+    fn drop_node(&mut self) -> Vec<Message> {
         let leaving_node = match sample_single(self.active_nodes()) {
             Some((name, _)) => *name,
             None => return vec![],
@@ -120,10 +120,39 @@ impl Simulation {
             .collect()
     }
 
+    /// Kill a connection between a pair of nodes.
+    fn disconnect_pair(&mut self) -> Vec<Message> {
+        let (name0, name1) = {
+            let pair = sample(self.active_nodes(), 2);
+            if pair.len() != 2 {
+                return vec![];
+            }
+            (*pair[0].0, *pair[1].0)
+        };
+
+        println!("Node({}) and Node({}) disconnecting from each other...",
+                 name0,
+                 name1);
+
+        let _ = self.connections.remove(&(name0, name1));
+        let _ = self.connections.remove(&(name1, name0));
+
+        vec![Message {
+                 sender: name0,
+                 recipient: name1,
+                 content: ConnectionLost,
+             },
+             Message {
+                 sender: name1,
+                 recipient: name0,
+                 content: ConnectionLost,
+             }]
+    }
+
     fn complete_connections(names: Vec<Name>) -> BTreeSet<(Name, Name)> {
         let mut connections = BTreeSet::new();
-        for n1 in names.iter() {
-            for n2 in names.iter() {
+        for n1 in &names {
+            for n2 in &names {
                 if n1 != n2 {
                     connections.insert((*n1, *n2));
                 }
@@ -165,6 +194,12 @@ impl Simulation {
                 self.network.send(step, remove_messages);
             }
 
+            // Kill a connection between two nodes if we're past the stabilisation threshold.
+            if step >= self.params.drop_step && do_with_probability(self.params.prob_disconnect) {
+                let disconnect_messages = self.disconnect_pair();
+                self.network.send(step, disconnect_messages);
+            }
+
             let delivered = self.network.receive(step);
 
             for message in delivered {
@@ -188,11 +223,8 @@ impl Simulation {
 
         println!("-- final node states --");
         for node in self.nodes.values() {
-            match *node {
-                Active(ref node) => {
-                    println!("{}: current_blocks: {:#?}", node, node.current_blocks);
-                }
-                _ => (),
+            if let Active(ref node) = *node {
+                println!("{}: current_blocks: {:#?}", node, node.current_blocks);
             }
         }
 

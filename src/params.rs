@@ -13,8 +13,8 @@ pub struct SimulationParams {
     pub prob_drop: f64,
     /// Step at which to start dropping nodes (gives the network time to start up).
     pub drop_step: u64,
-    // Probability that a two-way connection will be lost on any given step.
-    // prob_disconnect: f64,
+    /// Probability that a two-way connection will be lost on any given step.
+    pub prob_disconnect: f64,
     // Probability that a lost two-way connection will be re-established on any given step.
     // prob_reconnect: f64
 }

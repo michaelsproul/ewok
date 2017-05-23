@@ -4,6 +4,7 @@ extern crate itertools;
 extern crate maplit;
 
 mod block;
+mod consistency;
 mod message;
 mod name;
 mod network;
@@ -21,20 +22,20 @@ use params::{SimulationParams, NodeParams};
 fn main() {
     let params = SimulationParams {
         num_nodes: 30,
-        num_steps: 5000,
-        max_delay: 5,
+        num_steps: 1150,
+        max_delay: 50,
         prob_join: 0.1,
-        prob_drop: 0.00,
-        drop_step: 100
+        prob_drop: 0.01,
+        drop_step: 150
     };
 
     let node_params = NodeParams {
         min_section_size: 4,
         split_buffer: 0,
-        join_timeout: 50
+        join_timeout: 80
     };
 
     let mut simulation = Simulation::new(params, node_params);
 
-    simulation.run();
+    simulation.run().unwrap();
 }

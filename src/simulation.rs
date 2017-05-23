@@ -6,6 +6,7 @@ use node::Node;
 use node::Node::*;
 use name::Name;
 use block::Block;
+use consistency::check_consistency;
 use message::Message;
 use message::MessageContent::*;
 use params::{NodeParams, SimulationParams};
@@ -139,7 +140,8 @@ impl Simulation {
         self.connections.contains(&(message.sender, message.recipient))
     }
 
-    pub fn run(&mut self) {
+    /// Run the simulation, returning Ok iff the network was consistent upon termination.
+    pub fn run(&mut self) -> Result<(), ()> {
         for step in 0..self.params.num_steps {
             println!("-- step {} --", step);
 
@@ -185,5 +187,7 @@ impl Simulation {
                 _ => ()
             }
         }
+
+        check_consistency(&self.nodes)
     }
 }

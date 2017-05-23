@@ -183,13 +183,18 @@ impl ActiveNode {
         our_blocks(&self.current_blocks, self.our_name)
     }
 
+    /// True if the given node could be added to the given block
+    fn could_be_added(node: Name, block: &Block) -> bool {
+        !block.members.contains(&node) && block.prefix.matches(node)
+    }
+
     /// Construct new successor blocks based on our view of the network.
     pub fn construct_new_votes(&self, step: u64) -> Vec<Vote> {
         let mut votes = vec![];
 
         for node in self.peer_states.nodes_to_add(step) {
             for block in self.our_current_blocks() {
-                if !block.members.contains(&node) {
+                if Self::could_be_added(node, block) {
                     println!("{}: peer {} is missing from current block: {:?}", self, node, block);
                     votes.push(Vote {
                         from: block.clone(),
@@ -213,7 +218,7 @@ impl ActiveNode {
         }
 
         // TODO: parametrise by min_split_size
-        votes.extend(split_blocks(&self.current_blocks, self.our_name, 6));
+        votes.extend(split_blocks(&self.current_blocks, self.our_name, 4));
 
         votes
     }

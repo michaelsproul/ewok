@@ -20,7 +20,7 @@ use params::{SimulationParams, NodeParams};
 
 fn main() {
     let params = SimulationParams {
-        num_nodes: 24,
+        num_nodes: 30,
         num_steps: 5000,
         max_delay: 5,
         prob_join: 0.1,

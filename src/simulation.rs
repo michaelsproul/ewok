@@ -102,14 +102,12 @@ impl Simulation {
 
         println!("Node({}): dying...", leaving_node);
 
-        // Block the connections.
-        self.block_all_connections(leaving_node);
-
         // Mark the node dead.
         self.nodes.get_mut(&leaving_node).unwrap().kill();
 
-        // Send disconnect messages.
-        self.active_nodes()
+        // Send disconnect messages, ensuring we don't send a disconnect if the connection
+        // already dropped.
+        let messages = self.active_nodes()
             .filter(|&(&neighbour, _)| self.connections.contains(&(neighbour, leaving_node)))
             .map(|(&neighbour, _)| {
                      Message {
@@ -118,7 +116,12 @@ impl Simulation {
                          content: ConnectionLost,
                      }
                  })
-            .collect()
+            .collect();
+
+        // Block the connections to and from this node.
+        self.block_all_connections(leaving_node);
+
+        messages
     }
 
     /// Kill a connection between a pair of nodes.

@@ -52,6 +52,14 @@ impl Node {
         println!("Node({}): starting up!", name);
         *self = Active(ActiveNode::new(name, genesis, params));
     }
+
+    /// Returns true if this node is active, the peer is known and its state is `Disconnected`.
+    pub fn is_disconnected_from(&self, name: &Name) -> bool {
+        match *self {
+            Active(ref node) => node.peer_states.is_disconnected_from(name),
+            _ => false,
+        }
+    }
 }
 
 pub struct ActiveNode {

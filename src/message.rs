@@ -23,6 +23,5 @@ pub enum MessageContent {
     /// Pseudo-message sent to tell recipient that they've lost their connection to sender.
     ConnectionLost,
     /// Pseudo-message sent to tell recipient that they've regained a connection to sender.
-    #[allow(unused)]
     ConnectionRegained,
 }

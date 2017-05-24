@@ -4,8 +4,9 @@ use std::mem;
 use network::Network;
 use node::Node;
 use node::Node::*;
-use name::Name;
+use name::{Name, Prefix};
 use block::Block;
+use generate::generate_nodes;
 use consistency::check_consistency;
 use message::Message;
 use message::MessageContent::*;
@@ -94,6 +95,30 @@ impl Simulation {
             node_params,
             connections,
             disconnected: BTreeSet::new(),
+        }
+    }
+
+    // FIXME: seperate network params from simulation params?
+    pub fn new_from(sections: BTreeMap<Prefix, usize>,
+                    params: SimulationParams,
+                    node_params: NodeParams) -> Self
+    {
+        let nodes = generate_nodes(&sections, node_params.clone());
+
+        // FIXME: can't use genesis block for joining nodes - genesis set?
+        let genesis = Block::genesis(0);
+
+        let connections = Self::complete_connections(nodes.keys().cloned().collect());
+        let network = Network::new(params.max_delay);
+
+        Simulation {
+            nodes,
+            genesis,
+            network,
+            params,
+            node_params,
+            connections,
+            disconnected: BTreeSet::new()
         }
     }
 

@@ -26,6 +26,10 @@ impl Node {
         Active(ActiveNode::new(name, genesis, params))
     }
 
+    pub fn established(name: Name, current_blocks: CurrentBlocks, params: NodeParams) -> Self {
+        Active(ActiveNode::new_established(name, current_blocks, params))
+    }
+
     pub fn joining() -> Self {
         WaitingToJoin
     }
@@ -86,12 +90,27 @@ impl fmt::Display for ActiveNode {
 }
 
 impl ActiveNode {
+    /// Create a new node which starts from a given genesis block.
     pub fn new(name: Name, genesis: Block, params: NodeParams) -> Self {
         ActiveNode {
             our_name: name,
             valid_blocks: BTreeSet::from_iter(vec![genesis.clone()]),
             current_blocks: BTreeSet::from_iter(vec![genesis]),
             vote_counts: BTreeMap::new(),
+            peer_states: PeerStates::new(params.clone()),
+            message_filter: BTreeSet::new(),
+            params,
+        }
+    }
+
+    /// Create a new node which starts from a given set of valid and current blocks.
+    pub fn new_established(name: Name, current_blocks: CurrentBlocks, params: NodeParams) -> Self {
+        ActiveNode {
+            our_name: name,
+            valid_blocks: current_blocks.clone(),
+            current_blocks,
+            vote_counts: BTreeMap::new(),
+            // FIXME: confirmed peer states for all peers.
             peer_states: PeerStates::new(params.clone()),
             message_filter: BTreeSet::new(),
             params,

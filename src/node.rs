@@ -208,10 +208,7 @@ impl ActiveNode {
         for node in self.peer_states.nodes_to_add(step) {
             for block in self.our_current_blocks() {
                 if Self::could_be_added(node, block) {
-                    println!("{}: peer {} is missing from current block: {:?}",
-                             self,
-                             node,
-                             block);
+                    println!("{}: voting to add {} to: {:?}", self, node, block);
                     votes.push(Vote {
                                    from: block.clone(),
                                    to: block.add_node(node),
@@ -223,10 +220,7 @@ impl ActiveNode {
         for node in self.peer_states.nodes_to_drop(step) {
             for block in self.our_current_blocks() {
                 if block.members.contains(&node) {
-                    println!("{}: peer {} should be removed from current block: {:?}",
-                             self,
-                             node,
-                             block);
+                    println!("{}: voting to remove {} from: {:?}", self, node, block);
                     votes.push(Vote {
                                    from: block.clone(),
                                    to: block.remove_node(node),
@@ -235,7 +229,10 @@ impl ActiveNode {
             }
         }
 
-        votes.extend(split_blocks(&self.current_blocks, self.our_name, self.min_split_size()));
+        for vote in split_blocks(&self.current_blocks, self.our_name, self.min_split_size()) {
+            println!("{}: voting to split from: {:?} to: {:?}", self, vote.from, vote.to);
+            votes.push(vote);
+        }
 
         votes
     }
@@ -248,7 +245,6 @@ impl ActiveNode {
         let mut to_broadcast = vec![];
 
         for vote in &votes {
-            println!("{}: voting for {:?} based on our view", self, vote);
             let agreed_msgs = self.add_vote(vote.clone(), Some(our_name));
             to_broadcast.extend(agreed_msgs);
         }

@@ -8,7 +8,6 @@ pub fn split_blocks(current_blocks: &CurrentBlocks,
                     -> Vec<Vote> {
     our_blocks(current_blocks, our_name)
         .filter_map(|block| split_block(block, current_blocks, min_split_size))
-        .inspect(|_| println!("proposing a split"))
         .flat_map(|(v0, v1)| vec![v0, v1])
         .collect()
 }

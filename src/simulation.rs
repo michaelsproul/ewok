@@ -365,6 +365,6 @@ impl Simulation {
             }
         }
 
-        check_consistency(&self.nodes)
+        check_consistency(&self.nodes, self.node_params.min_section_size as usize)
     }
 }

@@ -212,3 +212,11 @@ pub fn section_blocks<'a>(blocks: &'a BTreeSet<Block>,
         .filter(move |block| block.prefix.matches(our_name));
     Box::new(section_blocks)
 }
+
+/// Blocks that contain a given prefix.
+pub fn blocks_for_prefix<'a>(blocks: &'a BTreeSet<Block>,
+                             prefix: Prefix)
+                             -> Box<Iterator<Item = &'a Block> + 'a> {
+    let result = blocks.iter().filter(move |&b| b.prefix == prefix);
+    Box::new(result)
+}

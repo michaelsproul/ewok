@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use itertools::Itertools;
 
 /// Check that all the nodes have a consistent view of the network.
-pub fn check_consistency(nodes: &BTreeMap<Name, Node>) -> Result<(), ()> {
+pub fn check_consistency(nodes: &BTreeMap<Name, Node>, min_section_size: usize) -> Result<(), ()> {
     let mut sections = btreemap!{};
 
     for node in nodes.values() {
@@ -26,6 +26,12 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>) -> Result<(), ()> {
             println!("multiple versions of {:?}, they are: {:#?}",
                      prefix,
                      versions);
+        } else {
+            let members = &versions.iter().next().unwrap().members;
+            if members.len() < min_section_size {
+                failed = true;
+                println!("section too small: {:?} with members {:?}", prefix, members);
+            }
         }
     }
 

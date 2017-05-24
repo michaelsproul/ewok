@@ -208,6 +208,18 @@ impl Prefix {
          self.pushed(true)
              .is_covered_by_impl(prefixes, max_prefix_len))
     }
+
+    /// Returns the prefix that is the sibling of `self` (if one exists)
+    pub fn sibling(&self) -> Option<Prefix> {
+        if self.bit_count > 0 {
+            Some(Prefix {
+                     name: self.name.with_flipped_bit(self.bit_count - 1),
+                     bit_count: self.bit_count,
+                 })
+        } else {
+            None
+        }
+    }
 }
 
 impl PartialEq<Prefix> for Prefix {

@@ -110,6 +110,7 @@ impl Simulation {
 
         // Send disconnect messages.
         self.active_nodes()
+            .filter(|&(&neighbour, _)| self.connections.contains(&(neighbour, leaving_node)))
             .map(|(&neighbour, _)| {
                      Message {
                          sender: leaving_node,

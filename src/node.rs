@@ -230,7 +230,10 @@ impl ActiveNode {
         }
 
         for vote in split_blocks(&self.current_blocks, self.our_name, self.min_split_size()) {
-            println!("{}: voting to split from: {:?} to: {:?}", self, vote.from, vote.to);
+            println!("{}: voting to split from: {:?} to: {:?}",
+                     self,
+                     vote.from,
+                     vote.to);
             votes.push(vote);
         }
 
@@ -241,7 +244,6 @@ impl ActiveNode {
         let votes = self.construct_new_votes(step);
         let our_name = self.our_name;
 
-        // FIXME: should probably pass a "message sender" around for this...
         let mut to_broadcast = vec![];
 
         for vote in &votes {

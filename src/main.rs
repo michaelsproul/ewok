@@ -22,7 +22,7 @@ fn main() {
     let params = SimulationParams {
         num_nodes: 30,
         num_steps: 1150,
-        max_delay: 50,
+        max_delay: 5,
         prob_join: 0.1,
         prob_drop: 0.01,
         drop_step: 150,
@@ -32,7 +32,7 @@ fn main() {
     let node_params = NodeParams {
         min_section_size: 4,
         split_buffer: 0,
-        join_timeout: 80,
+        join_timeout: 20,
     };
 
     let mut simulation = Simulation::new(params, node_params);

@@ -87,16 +87,20 @@ impl fmt::Display for ActiveNode {
 impl ActiveNode {
     /// Create a new node which starts from a given set of valid and current blocks.
     pub fn new(name: Name, current_blocks: CurrentBlocks, params: NodeParams) -> Self {
-        ActiveNode {
+        let mut node = ActiveNode {
             our_name: name,
             valid_blocks: current_blocks.clone(),
             current_blocks,
             vote_counts: BTreeMap::new(),
-            // FIXME: confirmed peer states for all genesis peers.
             peer_states: PeerStates::new(params.clone()),
             message_filter: BTreeSet::new(),
             params,
-        }
+        };
+
+        // Update the peer states immediately so that genesis nodes are considered confirmed.
+        node.update_peer_states(0);
+
+        node
     }
 
     /// Minimum size that all sections must be before splitting.

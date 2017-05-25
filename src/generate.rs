@@ -14,9 +14,9 @@ const MAX_GUESSES: usize = 1000;
 /// Generate a bunch of nodes based on sizes specified for sections.
 ///
 /// `sections`: map from prefix to desired size for that section.
-pub fn generate_nodes(sections: &BTreeMap<Prefix, usize>,
-                      params: NodeParams)
-                      -> BTreeMap<Name, Node>
+pub fn generate_network(sections: &BTreeMap<Prefix, usize>,
+                        params: NodeParams)
+                        -> (BTreeMap<Name, Node>, CurrentBlocks)
 {
     // TODO: sanity check for prefix non-overlap
     let mut nodes_by_section = btreemap!{};
@@ -30,10 +30,12 @@ pub fn generate_nodes(sections: &BTreeMap<Prefix, usize>,
 
     let current_blocks = construct_blocks(nodes_by_section.clone());
 
-    nodes_by_section.into_iter()
+    let nodes = nodes_by_section.into_iter()
         .flat_map(|(_, names)| names)
-        .map(|name| (name, Node::established(name, current_blocks.clone(), params.clone())))
-        .collect()
+        .map(|name| (name, Node::active(name, current_blocks.clone(), params.clone())))
+        .collect();
+
+    (nodes, current_blocks)
 }
 
 /// Construct a set of blocks to describe the given sections.

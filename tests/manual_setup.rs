@@ -15,7 +15,8 @@ fn default_params() -> SimulationParams {
         max_delay: 5,
         prob_drop: 0.01,
         drop_step: 0,
-        prob_disconnect: 0.01
+        prob_disconnect: 0.01,
+        prob_reconnect: 0.45
     }
 }
 

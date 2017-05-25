@@ -122,7 +122,7 @@ impl Prefix {
     /// Create a `Prefix` using the given byte as the highest order byte of the prefix.
     pub fn short(bit_count: usize, name: u8) -> Prefix {
         let long_name = (name as u64) << (64 - 8);
-        Prefix::new(bit_count, long_name)
+        Prefix::new(bit_count, Name(long_name))
     }
 
     /// Compute the length of the common prefix of this prefix and the given name.

@@ -275,7 +275,6 @@ impl ActiveNode {
         let vote_msgs: Vec<_> = votes.into_iter().map(VoteMsg).collect();
         to_broadcast.extend(self.broadcast(vote_msgs));
 
-        // TODO: does this belong here..?
         self.update_peer_states(step);
 
         to_broadcast

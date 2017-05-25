@@ -1,8 +1,29 @@
-use rand::{self, weak_rng, XorShiftRng, Rand, Rng};
+use rand::{self, thread_rng, XorShiftRng, Rand, Rng, SeedableRng};
 use std::cell::RefCell;
+use std::env;
 
 thread_local! {
-    static WEAK_RNG: RefCell<XorShiftRng> = RefCell::new(weak_rng());
+    static WEAK_RNG: RefCell<XorShiftRng> = RefCell::new({
+        #[cfg_attr(feature="cargo-clippy", allow(should_assert_eq))]
+        let seed = match env::var("EWOK_SEED") {
+            Ok(value) => {
+                let nums: Vec<u32> = value.split(|c| c == '[' || c == ']' || c == ' ' || c == ',')
+                                          .filter_map(|s| s.parse().ok())
+                                          .collect();
+                assert!(nums.len() == 4, "EWOK_SEED {} isn't in the form '[1, 2, 3, 4]'.", value);
+                [nums[0], nums[1], nums[2], nums[3]]
+            }
+            Err(_) => {
+                let mut rng = thread_rng();
+                [rng.next_u32().wrapping_add(rng.next_u32()),
+                 rng.next_u32().wrapping_add(rng.next_u32()),
+                 rng.next_u32().wrapping_add(rng.next_u32()),
+                 rng.next_u32().wrapping_add(rng.next_u32())]
+            }
+        };
+        println!("Seed: {:?}", seed);
+        XorShiftRng::from_seed(seed)
+    });
 }
 
 /// Random value from the thread-local weak RNG.

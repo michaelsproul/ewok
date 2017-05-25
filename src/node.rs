@@ -7,6 +7,7 @@ use block::{Block, Vote, ValidBlocks, CurrentBlocks, VoteCounts, new_valid_block
 use peer_state::{PeerStates, nodes_in_all, nodes_in_any};
 use params::NodeParams;
 use split::split_blocks;
+use merge::merge_blocks;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
@@ -256,6 +257,16 @@ impl ActiveNode {
 
         for vote in split_blocks(&self.current_blocks, self.our_name, self.min_split_size()) {
             println!("{}: voting to split from: {:?} to: {:?}",
+                     self,
+                     vote.from,
+                     vote.to);
+            votes.push(vote);
+        }
+
+        for vote in merge_blocks(&self.current_blocks,
+                                 self.our_name,
+                                 self.params.min_section_size as usize) {
+            println!("{}: voting to merge from: {:?} to: {:?}",
                      self,
                      vote.from,
                      vote.to);

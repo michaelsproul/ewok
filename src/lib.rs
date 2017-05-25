@@ -15,3 +15,4 @@ pub mod peer_state;
 pub mod random;
 pub mod simulation;
 pub mod split;
+pub mod merge;

@@ -1,0 +1,4 @@
+* leave disconnects as is
+* send votes to nodes from all current sections (disconnected or not)
+* don't drop messages: just requeue them at the network layer
+* seperate events from messages

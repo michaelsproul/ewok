@@ -2,6 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
 
 use network::Network;
+use event::Event;
+use event_schedule::EventSchedule;
 use node::Node;
 use node::Node::*;
 use name::{Name, Prefix};
@@ -11,7 +13,8 @@ use consistency::check_consistency;
 use message::Message;
 use message::MessageContent::*;
 use params::{NodeParams, SimulationParams};
-use random::{random, sample, sample_single, do_with_probability};
+use random::{random, sample, do_with_probability};
+use random_events::RandomEvents;
 use self::detail::DisconnectedPair;
 
 mod detail {
@@ -70,6 +73,10 @@ pub struct Simulation {
     /// direction, so in the case of a successful reconnect, one entry here will be removed and will
     /// result in two entries being added to `connections`.
     disconnected: BTreeSet<DisconnectedPair>,
+    /// Generator of random events.
+    random_events: RandomEvents,
+    /// Event schedule - specifying events to happen at various steps.
+    event_schedule: EventSchedule,
 }
 
 impl Simulation {
@@ -89,6 +96,8 @@ impl Simulation {
         let connections = Self::complete_connections(nodes.keys().cloned().collect());
         let network = Network::new(params.max_delay);
 
+        let random_events = RandomEvents::new(params.clone());
+
         Simulation {
             nodes,
             genesis_set,
@@ -97,6 +106,8 @@ impl Simulation {
             node_params,
             connections,
             disconnected: BTreeSet::new(),
+            random_events,
+            event_schedule: EventSchedule::empty(),
         }
     }
 
@@ -104,6 +115,7 @@ impl Simulation {
     ///
     /// Note: the `num_nodes` parameter is entirely ignored by this constructor.
     pub fn new_from(sections: BTreeMap<Prefix, usize>,
+                    event_schedule: EventSchedule,
                     params: SimulationParams,
                     node_params: NodeParams)
                     -> Self {
@@ -112,6 +124,8 @@ impl Simulation {
         let connections = Self::complete_connections(nodes.keys().cloned().collect());
         let network = Network::new(params.max_delay);
 
+        let random_events = RandomEvents::new(params.clone());
+
         Simulation {
             nodes,
             genesis_set,
@@ -120,6 +134,8 @@ impl Simulation {
             node_params,
             connections,
             disconnected: BTreeSet::new(),
+            random_events,
+            event_schedule,
         }
     }
 
@@ -128,33 +144,7 @@ impl Simulation {
         Box::new(active_nodes)
     }
 
-    fn find_joining_node(&self) -> Option<Name> {
-        let joining_nodes = self.nodes
-            .iter()
-            .filter(|&(_, node)| node.is_joining())
-            .map(|(name, _)| *name);
-
-        sample_single(joining_nodes)
-    }
-
-    /// Choose a currently waiting node and start its join process.
-    fn join_node(&mut self) -> Vec<Message> {
-        let joining = match self.find_joining_node() {
-            Some(name) => name,
-            None => return vec![],
-        };
-
-        // TODO: send only to this node's section (for now, send to the whole network).
-        let messages = self.active_nodes()
-            .map(|(&neighbour, _)| {
-                     Message {
-                         sender: joining,
-                         recipient: neighbour,
-                         content: NodeJoined,
-                     }
-                 })
-            .collect();
-
+    fn apply_add_node(&mut self, joining: Name) {
         // Make the node active, and let it build its way up from the genesis block(s).
         let genesis_set = self.genesis_set.clone();
         let params = self.node_params.clone();
@@ -162,34 +152,13 @@ impl Simulation {
             .get_mut(&joining)
             .unwrap()
             .make_active(joining, genesis_set, params);
-
-        messages
     }
 
-    /// Drop an existing node if one exists to drop.
-    fn drop_node(&mut self) -> Vec<Message> {
-        let leaving_node = match sample_single(self.active_nodes()) {
-            Some((name, _)) => *name,
-            None => return vec![],
-        };
-
+    fn apply_remove_node(&mut self, leaving_node: Name) {
         println!("Node({}): dying...", leaving_node);
 
         // Mark the node dead.
         self.nodes.get_mut(&leaving_node).unwrap().kill();
-
-        // Send disconnect messages, ensuring we don't send a disconnect if the connection
-        // already dropped.
-        let messages = self.active_nodes()
-            .filter(|&(&neighbour, _)| self.connections.contains(&(neighbour, leaving_node)))
-            .map(|(&neighbour, _)| {
-                     Message {
-                         sender: leaving_node,
-                         recipient: neighbour,
-                         content: ConnectionLost,
-                     }
-                 })
-            .collect();
 
         // Block the connections to and from this node.
         self.block_all_connections(leaving_node);
@@ -198,8 +167,14 @@ impl Simulation {
             .into_iter()
             .filter(|pair| pair.lower() != leaving_node && pair.higher() != leaving_node)
             .collect();
+    }
 
-        messages
+    fn apply_event(&mut self, event: &Event) {
+        match *event {
+            Event::AddNode(name) => self.apply_add_node(name),
+            Event::RemoveNode(name) => self.apply_remove_node(name),
+            Event::RemoveNodeFrom(_) => panic!("normalise RemoveNodeFrom before applying")
+        }
     }
 
     /// Kill a connection between a pair of nodes which aren't already disconnected.
@@ -309,17 +284,19 @@ impl Simulation {
 
     /// Generate events to occur at the given step, and send messages for them.
     pub fn generate_events(&mut self, step: u64) {
-        // Join an existing node if one exists, and it's been long enough since the last join.
-        if do_with_probability(self.params.prob_join) {
-            let join_messages = self.join_node();
-            self.network.send(step, join_messages);
+        let mut events = vec![];
+        events.extend(self.event_schedule.get_events(step));
+        events.extend(self.random_events.get_events(step, &self.nodes));
+
+        let mut ev_messages = vec![];
+
+        for ev in &mut events {
+            ev.normalise(&self.nodes);
+            ev_messages.extend(ev.broadcast(&self.nodes));
+            self.apply_event(ev);
         }
 
-        // Remove an existing node if one exists, and we're past the stabilisation threshold.
-        if step >= self.params.drop_step && do_with_probability(self.params.prob_drop) {
-            let remove_messages = self.drop_node();
-            self.network.send(step, remove_messages);
-        }
+        self.network.send(step, ev_messages);
 
         // Kill a connection between two nodes if we're past the stabilisation threshold.
         if step >= self.params.drop_step && do_with_probability(self.params.prob_disconnect) {

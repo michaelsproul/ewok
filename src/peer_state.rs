@@ -165,6 +165,18 @@ impl PeerStates {
             .map(|(name, _)| *name)
             .collect()
     }
+
+    /// Returns true if the peer is known and its state is `Disconnected`.
+    pub fn is_disconnected_from(&self, name: &Name) -> bool {
+        self.states
+            .get(name)
+            .map_or(false,
+                    |state| if let PeerState::Disconnected { .. } = *state {
+                        true
+                    } else {
+                        false
+                    })
+    }
 }
 
 /// Compute the set of nodes that are in all current blocks.

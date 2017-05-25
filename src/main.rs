@@ -26,7 +26,9 @@ fn main() {
         prob_join: 0.1,
         prob_drop: 0.01,
         drop_step: 150,
-        prob_disconnect: 0.01,
+        prob_disconnect: 0.05,
+        // Gives ~95% chance that a pair will reconnect within 5 steps
+        prob_reconnect: 0.45,
     };
 
     let node_params = NodeParams {

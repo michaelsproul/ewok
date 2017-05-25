@@ -11,6 +11,44 @@ use message::Message;
 use message::MessageContent::*;
 use params::{NodeParams, SimulationParams};
 use random::{random, sample, sample_single, do_with_probability};
+use self::detail::DisconnectedPair;
+
+mod detail {
+    use name::Name;
+
+    /// Holds a pair of names sorted by lowest first.
+    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct DisconnectedPair {
+        lower: Name,
+        higher: Name,
+    }
+
+    impl DisconnectedPair {
+        pub fn new(x: Name, y: Name) -> DisconnectedPair {
+            if x < y {
+                DisconnectedPair {
+                    lower: x,
+                    higher: y,
+                }
+            } else if x > y {
+                DisconnectedPair {
+                    lower: y,
+                    higher: x,
+                }
+            } else {
+                panic!("Node({}) can't disconnect from itself.", x);
+            }
+        }
+
+        pub fn lower(&self) -> Name {
+            self.lower
+        }
+
+        pub fn higher(&self) -> Name {
+            self.higher
+        }
+    }
+}
 
 pub struct Simulation {
     nodes: BTreeMap<Name, Node>,
@@ -20,8 +58,16 @@ pub struct Simulation {
     params: SimulationParams,
     /// Parameters for nodes.
     node_params: NodeParams,
-    /// Set of connections between nodes. Connections have a direction (from, to).
+    /// Set of connections between nodes. Connections have a direction (from, to). Due to random
+    /// disconnects and reconnects, an entry here does not necessarily mean that both peers consider
+    /// themselves to be connected; they may have not yet handled the `ConnectionRegained`
+    /// pseudo-message. Similarly, their entries may have been removed from here, but they may not
+    /// have handled the corresponding `ConnectionLost`s.
     connections: BTreeSet<(Name, Name)>,
+    /// Collection of disconnected pairs which should be trying to reconnect. These do not have a
+    /// direction, so in the case of a successful reconnect, one entry here will be removed and will
+    /// result in two entries being added to `connections`.
+    disconnected: BTreeSet<DisconnectedPair>,
 }
 
 impl Simulation {
@@ -47,6 +93,7 @@ impl Simulation {
             params,
             node_params,
             connections,
+            disconnected: BTreeSet::new(),
         }
     }
 
@@ -120,37 +167,80 @@ impl Simulation {
 
         // Block the connections to and from this node.
         self.block_all_connections(leaving_node);
+        let disconnected = mem::replace(&mut self.disconnected, BTreeSet::new());
+        self.disconnected = disconnected
+            .into_iter()
+            .filter(|pair| pair.lower() != leaving_node && pair.higher() != leaving_node)
+            .collect();
 
         messages
     }
 
-    /// Kill a connection between a pair of nodes.
+    /// Kill a connection between a pair of nodes which aren't already disconnected.
     fn disconnect_pair(&mut self) -> Vec<Message> {
-        let (name0, name1) = {
-            let pair = sample(self.active_nodes(), 2);
-            if pair.len() != 2 {
+        let mut pair;
+        loop {
+            let rnd_pair = sample(self.active_nodes(), 2);
+            if rnd_pair.len() != 2 {
                 return vec![];
             }
-            (*pair[0].0, *pair[1].0)
-        };
+            pair = DisconnectedPair::new(*rnd_pair[0].0, *rnd_pair[1].0);
+            if !self.nodes[&pair.lower()].is_disconnected_from(&pair.higher()) &&
+               !self.nodes[&pair.higher()].is_disconnected_from(&pair.lower()) {
+                break;
+            }
+        }
 
         println!("Node({}) and Node({}) disconnecting from each other...",
-                 name0,
-                 name1);
+                 pair.lower(),
+                 pair.higher());
+        let messages = vec![Message {
+                                sender: pair.lower(),
+                                recipient: pair.higher(),
+                                content: ConnectionLost,
+                            },
+                            Message {
+                                sender: pair.higher(),
+                                recipient: pair.lower(),
+                                content: ConnectionLost,
+                            }];
 
-        let _ = self.connections.remove(&(name0, name1));
-        let _ = self.connections.remove(&(name1, name0));
+        let _ = self.connections.remove(&(pair.lower(), pair.higher()));
+        let _ = self.connections.remove(&(pair.higher(), pair.lower()));
+        let _ = self.disconnected.insert(pair);
+        messages
+    }
 
-        vec![Message {
-                 sender: name0,
-                 recipient: name1,
-                 content: ConnectionLost,
-             },
-             Message {
-                 sender: name1,
-                 recipient: name0,
-                 content: ConnectionLost,
-             }]
+    /// Try to reconnect all pairs of nodes which have previously become disconnected. Each pair
+    /// will only succeed with `SimulationParams::prob_reconnect` probability.
+    fn reconnect_pairs(&mut self) -> Vec<Message> {
+        let disconnected = mem::replace(&mut self.disconnected, BTreeSet::new());
+        let mut messages = vec![];
+        for pair in disconnected {
+            // Ensure both have realised they're disconnected.
+            if self.nodes[&pair.lower()].is_disconnected_from(&pair.higher()) &&
+               self.nodes[&pair.higher()].is_disconnected_from(&pair.lower()) &&
+               do_with_probability(self.params.prob_reconnect) {
+                println!("Node({}) and Node({}) reconnecting to each other...",
+                         pair.lower(),
+                         pair.higher());
+                let _ = self.connections.insert((pair.lower(), pair.higher()));
+                let _ = self.connections.insert((pair.higher(), pair.lower()));
+                messages.push(Message {
+                                  sender: pair.lower(),
+                                  recipient: pair.higher(),
+                                  content: ConnectionRegained,
+                              });
+                messages.push(Message {
+                                  sender: pair.higher(),
+                                  recipient: pair.lower(),
+                                  content: ConnectionRegained,
+                              });
+            } else {
+                let _ = self.disconnected.insert(pair);
+            }
+        }
+        messages
     }
 
     fn complete_connections(names: Vec<Name>) -> BTreeSet<(Name, Name)> {
@@ -176,9 +266,19 @@ impl Simulation {
     }
 
     fn message_allowed(&self, message: &Message) -> bool {
-        message.content == ConnectionLost ||
-        self.connections
-            .contains(&(message.sender, message.recipient))
+        match message.content {
+            VoteMsg(..) |
+            VoteAgreedMsg(..) |
+            BootstrapMsg(..) => {
+                !self.nodes[&message.sender].is_disconnected_from(&message.recipient) &&
+                !self.nodes[&message.recipient].is_disconnected_from(&message.sender)
+            }
+            NodeJoined | ConnectionRegained => {
+                self.connections
+                    .contains(&(message.sender, message.recipient))
+            }
+            ConnectionLost => true,
+        }
     }
 
     /// Run the simulation, returning Ok iff the network was consistent upon termination.
@@ -202,6 +302,13 @@ impl Simulation {
             if step >= self.params.drop_step && do_with_probability(self.params.prob_disconnect) {
                 let disconnect_messages = self.disconnect_pair();
                 self.network.send(step, disconnect_messages);
+            }
+
+            // Try to reconnect any previously-disconnected pairs if we're past the stabilisation
+            // threshold. Exclude any which were disconnected in this step.
+            if step >= self.params.drop_step {
+                let reconnect_messages = self.reconnect_pairs();
+                self.network.send(step, reconnect_messages);
             }
 
             let delivered = self.network.receive(step);

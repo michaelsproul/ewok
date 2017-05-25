@@ -1,92 +1,103 @@
+use rand::{Rand, Rng};
 use std::cmp::Ordering;
-use std::mem;
+use std::fmt::{self, Binary, Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
-use std::fmt::{self, Formatter, Binary, Debug};
+use std::mem;
 use std::u64;
 
 /// Node names are u64s.
-pub type Name = u64;
+#[derive(PartialOrd, Ord, PartialEq, Eq, Copy, Clone, Hash, Default)]
+pub struct Name(pub u64);
 
-/// Name type (Xorable in routing library).
-trait NameT: Ord {
+#[allow(dead_code)]
+impl Name {
     /// Returns the length of the common prefix with the `other` name; e. g.
     /// the when `other = 11110000` and `self = 11111111` this is 4.
-    fn common_prefix(&self, other: Self) -> usize;
+    pub fn common_prefix(&self, other: Self) -> usize {
+        (self.0 ^ other.0).leading_zeros() as usize
+    }
 
     /// Compares the distance of the arguments to `self`. Returns `Less` if `lhs` is closer,
     /// `Greater` if `rhs` is closer, and `Equal` if `lhs == rhs`. (The XOR distance can only be
     /// equal if the arguments ar equal.)
-    fn cmp_distance(&self, lhs: Self, rhs: Self) -> Ordering;
+    pub fn cmp_distance(&self, lhs: Self, rhs: Self) -> Ordering {
+        Ord::cmp(&(lhs.0 ^ self.0), &(rhs.0 ^ self.0))
+    }
 
     /// Returns `true` if the `i`-th bit is `1`.
-    fn bit(&self, i: usize) -> bool;
+    pub fn bit(&self, i: usize) -> bool {
+        let pow_i = 1 << (mem::size_of::<Self>() * 8 - 1 - i); // 1 on bit i.
+        self.0 & pow_i != 0
+    }
 
     /// Returns a copy of `self`, with the `index`-th bit set to `bit`.
     ///
     /// If `index` exceeds the number of bits in `self`, an unmodified copy of `self` is returned.
-    fn with_bit(self, i: usize, bit: bool) -> Self;
-
-    /// Returns a copy of `self`, with the `index`-th bit flipped.
-    ///
-    /// If `index` exceeds the number of bits in `self`, an unmodified copy of `self` is returned.
-    fn with_flipped_bit(self, i: usize) -> Self;
-
-    /// Returns a binary format string, with leading zero bits included.
-    fn binary(&self) -> String;
-
-    /// Returns a copy of self with first `n` bits preserved, and remaining bits
-    /// set to 0 (val == false) or 1 (val == true).
-    fn set_remaining(self, n: usize, val: bool) -> Self;
-}
-
-impl NameT for u64 {
-    fn common_prefix(&self, other: Self) -> usize {
-        (self ^ other).leading_zeros() as usize
-    }
-
-    fn cmp_distance(&self, lhs: Self, rhs: Self) -> Ordering {
-        Ord::cmp(&(lhs ^ self), &(rhs ^ self))
-    }
-
-    fn bit(&self, i: usize) -> bool {
-        let pow_i = 1 << (mem::size_of::<Self>() * 8 - 1 - i); // 1 on bit i.
-        self & pow_i != 0
-    }
-
-    fn with_bit(mut self, i: usize, bit: bool) -> Self {
+    pub fn with_bit(mut self, i: usize, bit: bool) -> Self {
         if i >= mem::size_of::<Self>() * 8 {
             return self;
         }
         let pow_i = 1 << (mem::size_of::<Self>() * 8 - 1 - i); // 1 on bit i.
         if bit {
-            self |= pow_i;
+            self.0 |= pow_i;
         } else {
-            self &= !pow_i;
+            self.0 &= !pow_i;
         }
         self
     }
 
-    fn with_flipped_bit(mut self, i: usize) -> Self {
+    /// Returns a copy of `self`, with the `index`-th bit flipped.
+    ///
+    /// If `index` exceeds the number of bits in `self`, an unmodified copy of `self` is returned.
+    pub fn with_flipped_bit(mut self, i: usize) -> Self {
         if i >= mem::size_of::<Self>() * 8 {
             return self;
         }
         let pow_i = 1 << (mem::size_of::<Self>() * 8 - 1 - i); // 1 on bit i.
-        self ^= pow_i;
+        self.0 ^= pow_i;
         self
     }
 
-    fn binary(&self) -> String {
-        format!("{1:00$b}", mem::size_of::<Self>() * 8, self)
-    }
-
-    fn set_remaining(self, n: usize, val: bool) -> Self {
+    /// Returns a copy of self with first `n` bits preserved, and remaining bits
+    /// set to 0 (val == false) or 1 (val == true).
+    pub fn set_remaining(mut self, n: usize, val: bool) -> Self {
         let bits = mem::size_of::<u64>() * 8;
-        if n >= bits {
-            self
-        } else {
+        if n < bits {
             let mask = !0 >> n;
-            if val { self | mask } else { self & !mask }
+            if val { self.0 |= mask } else { self.0 &= !mask }
         }
+        self
+    }
+}
+
+/// Prints full 64 character binary representation of `Name`, including leading zeros.
+impl Binary for Name {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "{1:00$b}", mem::size_of::<Self>() * 8, self.0)
+    }
+}
+
+/// Prints abbreviated hex representation of `Name`.   This is the first six characters of the full
+/// hex representation including leading zeros.
+impl Debug for Name {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        (self as &Display).fmt(formatter)
+    }
+}
+
+/// Prints abbreviated hex representation of `Name`.   This is the first six characters of the full
+/// hex representation including leading zeros.
+impl Display for Name {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        let mut hex = format!("{1:00$x}", mem::size_of::<Self>() * 2, self.0);
+        hex.truncate(6);
+        write!(formatter, "{}..", hex)
+    }
+}
+
+impl Rand for Name {
+    fn rand<R: Rng>(rng: &mut R) -> Name {
+        Name(rng.gen())
     }
 }
 
@@ -96,14 +107,14 @@ impl NameT for u64 {
 #[allow(dead_code)]
 pub struct Prefix {
     bit_count: usize,
-    name: u64,
+    name: Name,
 }
 
 #[allow(dead_code)]
 impl Prefix {
     /// Creates a new `Prefix` with the first `bit_count` bits of `name`.
     /// Insignificant bits are all set to 0.
-    pub fn new(bit_count: usize, name: u64) -> Prefix {
+    pub fn new(bit_count: usize, name: Name) -> Prefix {
         Prefix {
             bit_count: bit_count,
             name: name.set_remaining(bit_count, false),
@@ -111,7 +122,7 @@ impl Prefix {
     }
 
     /// Compute the length of the common prefix of this prefix and the given name.
-    pub fn common_prefix(&self, name: u64) -> usize {
+    pub fn common_prefix(&self, name: Name) -> usize {
         self.name.common_prefix(name)
     }
 
@@ -162,7 +173,7 @@ impl Prefix {
     }
 
     /// Returns `true` if this is a prefix of the given `name`.
-    pub fn matches(&self, name: u64) -> bool {
+    pub fn matches(&self, name: Name) -> bool {
         self.name.common_prefix(name) >= self.bit_count
     }
 }
@@ -195,7 +206,7 @@ impl Hash for Prefix {
 
 impl Binary for Prefix {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        let mut binary = self.name.binary();
+        let mut binary = format!("{:b}", self.name);
         binary.truncate(self.bit_count);
         write!(formatter, "Prefix({})", binary)
     }

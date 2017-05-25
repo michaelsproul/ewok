@@ -206,20 +206,21 @@ mod test {
 
     #[test]
     fn current_blocks() {
-        let block = Block::genesis(0);
+        let block = Block::genesis(Name(0));
 
         let block1 = Block {
-            members: btreeset!{1, 2, 3, 4, 5},
+            members: btreeset!{Name(1), Name(2), Name(3), Name(4), Name(5)},
             ..block.clone()
         };
         let block2 = Block {
-            members: btreeset!{1, 3, 5},
+            members: btreeset!{Name(1), Name(3), Name(5)},
             ..block.clone()
         };
 
         let blocks = btreeset!{block1, block2};
 
-        assert_eq!(nodes_in_all(&blocks), btreeset!{1, 3, 5});
-        assert_eq!(nodes_in_any(&blocks), btreeset!{1, 2, 3, 4, 5});
+        assert_eq!(nodes_in_all(&blocks), btreeset!{Name(1), Name(3), Name(5)});
+        assert_eq!(nodes_in_any(&blocks),
+                   btreeset!{Name(1), Name(2), Name(3), Name(4), Name(5)});
     }
 }

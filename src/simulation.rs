@@ -105,8 +105,8 @@ impl Simulation {
     /// Note: the `num_nodes` parameter is entirely ignored by this constructor.
     pub fn new_from(sections: BTreeMap<Prefix, usize>,
                     params: SimulationParams,
-                    node_params: NodeParams) -> Self
-    {
+                    node_params: NodeParams)
+                    -> Self {
         let (nodes, genesis_set) = generate_network(&sections, node_params.clone());
 
         let connections = Self::complete_connections(nodes.keys().cloned().collect());
@@ -119,7 +119,7 @@ impl Simulation {
             params,
             node_params,
             connections,
-            disconnected: BTreeSet::new()
+            disconnected: BTreeSet::new(),
         }
     }
 

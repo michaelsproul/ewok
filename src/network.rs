@@ -59,7 +59,10 @@ impl Network {
         let mut all_deliver = vec![];
 
         // Check that old messages which should have been delivered, have been.
-        let num_undelivered: usize = conn_messages.range(..start_step).map(|(_, m)| m.len()).sum();
+        let num_undelivered: usize = conn_messages
+            .range(..start_step)
+            .map(|(_, m)| m.len())
+            .sum();
         debug_assert_eq!(num_undelivered, 0);
 
         for (step_sent, messages) in conn_messages.range_mut(start_step..end_step) {

@@ -202,3 +202,13 @@ pub fn our_blocks<'a>(blocks: &'a BTreeSet<Block>,
         .filter(move |b| b.members.contains(&our_name));
     Box::new(ours)
 }
+
+/// Blocks that match our name, but that we are not necessarily a part of.
+pub fn section_blocks<'a>(blocks: &'a BTreeSet<Block>,
+                          our_name: Name)
+                          -> Box<Iterator<Item = &'a Block> + 'a> {
+    let section_blocks = blocks
+        .iter()
+        .filter(move |block| block.prefix.matches(our_name));
+    Box::new(section_blocks)
+}

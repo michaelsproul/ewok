@@ -6,7 +6,7 @@ use block::Block;
 use self::PeerState::*;
 use itertools::Itertools;
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum PeerState {
     /// Appeared in all current blocks at some point.
     Confirmed,
@@ -24,6 +24,7 @@ enum PeerState {
     },
 }
 
+#[derive(Debug)]
 pub struct PeerStates {
     /// States of known peers.
     states: BTreeMap<Name, PeerState>,
@@ -179,13 +180,13 @@ impl PeerStates {
     }
 }
 
-/// Compute the set of nodes that are in all current blocks.
-pub fn in_all_current(current_blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
-    if current_blocks.is_empty() {
+/// Compute the set of nodes that are in all the given blocks.
+pub fn nodes_in_all(blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
+    if blocks.is_empty() {
         return BTreeSet::new();
     }
 
-    current_blocks
+    blocks
         .iter()
         .map(|block| block.members.clone())
         .fold1(|members1, members2| &members1 & &members2)
@@ -193,8 +194,8 @@ pub fn in_all_current(current_blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
 }
 
 /// Compute the set of nodes that are in any current block.
-pub fn in_any_current(current_blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
-    current_blocks
+pub fn nodes_in_any(blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
+    blocks
         .iter()
         .fold(BTreeSet::new(), |acc, block| &acc | &block.members)
 }
@@ -218,7 +219,7 @@ mod test {
 
         let blocks = btreeset!{block1, block2};
 
-        assert_eq!(in_all_current(&blocks), btreeset!{1, 3, 5});
-        assert_eq!(in_any_current(&blocks), btreeset!{1, 2, 3, 4, 5});
+        assert_eq!(nodes_in_all(&blocks), btreeset!{1, 3, 5});
+        assert_eq!(nodes_in_any(&blocks), btreeset!{1, 2, 3, 4, 5});
     }
 }

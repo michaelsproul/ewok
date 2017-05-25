@@ -3,8 +3,8 @@ use message::MessageContent;
 use message::MessageContent::*;
 use name::Name;
 use block::{Block, Vote, ValidBlocks, CurrentBlocks, VoteCounts, new_valid_blocks,
-            compute_current_blocks, our_blocks};
-use peer_state::{PeerStates, in_all_current, in_any_current};
+            compute_current_blocks, our_blocks, section_blocks};
+use peer_state::{PeerStates, nodes_in_all, nodes_in_any};
 use params::NodeParams;
 use split::split_blocks;
 
@@ -143,9 +143,14 @@ impl ActiveNode {
 
     /// Update peer states for changes to the set of current blocks.
     pub fn update_peer_states(&mut self, step: u64) {
-        let in_all = in_all_current(&self.current_blocks);
-        let in_any = in_any_current(&self.current_blocks);
-        let in_some = &in_any - &in_all;
+        let (in_all, in_some) = {
+            let our_section_blocks = self.our_current_section_blocks().cloned().collect();
+            let in_all = nodes_in_all(&our_section_blocks);
+            let in_any = nodes_in_any(&our_section_blocks);
+            let in_some = &in_any - &in_all;
+
+            (in_all, in_some)
+        };
 
         for name in in_all {
             self.peer_states.in_all_current(name, step);
@@ -202,6 +207,13 @@ impl ActiveNode {
     /// Blocks that we can legitimately vote on successors for, because we are part of them.
     pub fn our_current_blocks<'a>(&'a self) -> Box<Iterator<Item = &'a Block> + 'a> {
         our_blocks(&self.current_blocks, self.our_name)
+    }
+
+    /// Get all blocks for our current section(s),
+    ///
+    /// i.e. all the blocks whose prefix matches `name`.
+    pub fn our_current_section_blocks<'a>(&'a self) -> Box<Iterator<Item = &'a Block> + 'a> {
+        section_blocks(&self.current_blocks, self.our_name)
     }
 
     /// True if the given node could be added to the given block

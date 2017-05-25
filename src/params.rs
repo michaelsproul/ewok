@@ -1,5 +1,5 @@
 // TODO: consider getting rid of "num_nodes" parameter?
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SimulationParams {
     /// Number of nodes.
     pub num_nodes: u64,
@@ -20,7 +20,7 @@ pub struct SimulationParams {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NodeParams {
     /// Minimum section size.
     pub min_section_size: u64,

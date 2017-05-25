@@ -58,9 +58,9 @@ impl Network {
                          -> Vec<Message> {
         let mut all_deliver = vec![];
 
-        //println!("looking at messages in [{}..{})", start_step, end_step);
+        // Check that old messages which should have been delivered, have been.
         let num_undelivered: usize = conn_messages.range(..start_step).map(|(_, m)| m.len()).sum();
-        assert_eq!(num_undelivered, 0);
+        debug_assert_eq!(num_undelivered, 0);
 
         for (step_sent, messages) in conn_messages.range_mut(start_step..end_step) {
             // Partition randomly based on p, whilst also delivering any messages

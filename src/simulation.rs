@@ -73,6 +73,7 @@ pub struct Simulation {
 }
 
 impl Simulation {
+    /// Create a new simulation with a single seed node.
     pub fn new(params: SimulationParams, node_params: NodeParams) -> Self {
         let mut nodes = BTreeMap::new();
 
@@ -99,7 +100,9 @@ impl Simulation {
         }
     }
 
-    // FIXME: seperate network params from simulation params?
+    /// Create a new simulation with sections whose prefixes and sizes are specified by `sections`.
+    ///
+    /// Note: the `num_nodes` parameter is entirely ignored by this constructor.
     pub fn new_from(sections: BTreeMap<Prefix, usize>,
                     params: SimulationParams,
                     node_params: NodeParams) -> Self

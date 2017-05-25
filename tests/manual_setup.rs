@@ -8,7 +8,6 @@ use ewok::params::{SimulationParams, NodeParams};
 
 fn default_params() -> SimulationParams {
     SimulationParams {
-        // FIXME: remove num_nodes + prob_join
         num_nodes: 0,
         prob_join: 0.0,
         num_steps: 1000,

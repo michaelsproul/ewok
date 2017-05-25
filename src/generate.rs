@@ -18,7 +18,10 @@ pub fn generate_network(sections: &BTreeMap<Prefix, usize>,
                         params: NodeParams)
                         -> (BTreeMap<Name, Node>, CurrentBlocks)
 {
-    // TODO: sanity check for prefix non-overlap
+    // Check that the supplied prefixes describe a whole network.
+    assert!(Prefix::new(0, 0).is_covered_by(sections.keys()),
+            "Prefixes should cover the whole namespace");
+
     let mut nodes_by_section = btreemap!{};
 
     for (prefix, &size) in sections {

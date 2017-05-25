@@ -107,7 +107,7 @@ impl Simulation {
                     params: SimulationParams,
                     node_params: NodeParams)
                     -> Self {
-        let (nodes, genesis_set) = generate_network(&sections, node_params.clone());
+        let (nodes, genesis_set) = generate_network(&sections, &node_params);
 
         let connections = Self::complete_connections(nodes.keys().cloned().collect());
         let network = Network::new(params.max_delay);
@@ -337,24 +337,38 @@ impl Simulation {
                 self.network.send(step, reconnect_messages);
             }
 
-            let delivered = self.network.receive(step);
+            const MAX_EXTRA_STEPS: u64 = 1000;
+            // This loop will only run more than once when we're on the last step. It will cycle on
+            // the last step until the message queue is empty or MAX_EXTRA_STEPS have been run.
+            for extra_steps in 0..MAX_EXTRA_STEPS {
+                let delivered = self.network.receive(step + extra_steps);
 
-            for message in delivered {
-                if !self.message_allowed(&message) {
-                    println!("dropping this message: {:?}", message);
-                    continue;
+                for message in delivered {
+                    if !self.message_allowed(&message) {
+                        println!("dropping this message: {:?}", message);
+                        continue;
+                    }
+
+                    match *self.nodes.get_mut(&message.recipient).unwrap() {
+                        Active(ref mut node) => {
+                            let new_messages = node.handle_message(message, step + extra_steps);
+                            self.network.send(step + extra_steps, new_messages);
+                        }
+                        Dead => {
+                            println!("dropping message for dead node {}", message.recipient);
+                        }
+                        WaitingToJoin => panic!("invalid"),
+                    }
                 }
 
-                match *self.nodes.get_mut(&message.recipient).unwrap() {
-                    Active(ref mut node) => {
-                        let new_messages = node.handle_message(message, step);
-                        self.network.send(step, new_messages);
-                    }
-                    Dead => {
-                        println!("dropping message for dead node {}", message.recipient);
-                    }
-                    WaitingToJoin => panic!("invalid"),
+                if step != self.params.num_steps - 1 || self.network.queue_is_empty() {
+                    break;
                 }
+
+                assert_ne!(extra_steps + 1,
+                           MAX_EXTRA_STEPS,
+                           "The network has stalled trying to clear its message queue.");
+                println!("-- step {} --", step + extra_steps + 1);
             }
         }
 

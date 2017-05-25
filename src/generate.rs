@@ -16,10 +16,9 @@ const MAX_GUESSES: usize = 1000;
 /// `sections`: map from prefix to desired size for that section.
 pub fn generate_network(sections: &BTreeMap<Prefix, usize>,
                         params: NodeParams)
-                        -> (BTreeMap<Name, Node>, CurrentBlocks)
-{
+                        -> (BTreeMap<Name, Node>, CurrentBlocks) {
     // Check that the supplied prefixes describe a whole network.
-    assert!(Prefix::new(0, 0).is_covered_by(sections.keys()),
+    assert!(Prefix::new(0, Name(0)).is_covered_by(sections.keys()),
             "Prefixes should cover the whole namespace");
 
     let mut nodes_by_section = btreemap!{};
@@ -33,7 +32,8 @@ pub fn generate_network(sections: &BTreeMap<Prefix, usize>,
 
     let current_blocks = construct_blocks(nodes_by_section.clone());
 
-    let nodes = nodes_by_section.into_iter()
+    let nodes = nodes_by_section
+        .into_iter()
         .flat_map(|(_, names)| names)
         .map(|name| (name, Node::active(name, current_blocks.clone(), params.clone())))
         .collect();
@@ -45,7 +45,13 @@ pub fn generate_network(sections: &BTreeMap<Prefix, usize>,
 fn construct_blocks(nodes: BTreeMap<Prefix, BTreeSet<Name>>) -> CurrentBlocks {
     nodes
         .into_iter()
-        .map(|(prefix, members)| Block { prefix, members, version: 0 })
+        .map(|(prefix, members)| {
+                 Block {
+                     prefix,
+                     members,
+                     version: 0,
+                 }
+             })
         .collect()
 }
 
@@ -59,5 +65,3 @@ fn generate_name_with_prefix(prefix: &Prefix) -> Name {
     }
     panic!("couldn't generate a name to match: {:?}", prefix);
 }
-
-

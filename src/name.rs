@@ -104,13 +104,11 @@ impl Rand for Name {
 // A group prefix, i.e. a sequence of bits specifying the part of the network's name space
 // consisting of all names that start with this sequence.
 #[derive(Clone, Copy, Default, Eq, Ord)]
-#[allow(dead_code)]
 pub struct Prefix {
     bit_count: usize,
     name: Name,
 }
 
-#[allow(dead_code)]
 impl Prefix {
     /// Creates a new `Prefix` with the first `bit_count` bits of `name`.
     /// Insignificant bits are all set to 0.
@@ -119,6 +117,12 @@ impl Prefix {
             bit_count: bit_count,
             name: name.set_remaining(bit_count, false),
         }
+    }
+
+    /// Create a `Prefix` using the given byte as the highest order byte of the prefix.
+    pub fn short(bit_count: usize, name: u8) -> Prefix {
+        let long_name = (name as u64) << (64 - 8);
+        Prefix::new(bit_count, long_name)
     }
 
     /// Compute the length of the common prefix of this prefix and the given name.
@@ -175,6 +179,34 @@ impl Prefix {
     /// Returns `true` if this is a prefix of the given `name`.
     pub fn matches(&self, name: Name) -> bool {
         self.name.common_prefix(name) >= self.bit_count
+    }
+
+    /// Returns whether the namespace defined by `self` is covered by prefixes in the `prefixes`
+    /// set
+    pub fn is_covered_by<'a, U>(&self, prefixes: U) -> bool
+        where U: IntoIterator<Item = &'a Prefix> + Clone
+    {
+        let max_prefix_len = prefixes
+            .clone()
+            .into_iter()
+            .map(|x| x.bit_count())
+            .max()
+            .unwrap_or(0);
+        self.is_covered_by_impl(prefixes, max_prefix_len)
+    }
+
+    fn is_covered_by_impl<'a, U>(&self, prefixes: U, max_prefix_len: usize) -> bool
+        where U: IntoIterator<Item = &'a Prefix> + Clone
+    {
+        prefixes
+            .clone()
+            .into_iter()
+            .any(|x| x.is_compatible(*self) && x.bit_count() <= self.bit_count()) ||
+        (self.bit_count() <= max_prefix_len &&
+         self.pushed(false)
+             .is_covered_by_impl(prefixes.clone(), max_prefix_len) &&
+         self.pushed(true)
+             .is_covered_by_impl(prefixes, max_prefix_len))
     }
 }
 

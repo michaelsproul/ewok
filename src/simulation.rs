@@ -4,8 +4,9 @@ use std::mem;
 use network::Network;
 use node::Node;
 use node::Node::*;
-use name::Name;
+use name::{Name, Prefix};
 use block::Block;
+use generate::generate_network;
 use consistency::check_consistency;
 use message::Message;
 use message::MessageContent::*;
@@ -53,7 +54,8 @@ mod detail {
 pub struct Simulation {
     nodes: BTreeMap<Name, Node>,
     network: Network,
-    genesis: Block,
+    /// Set of blocks that all nodes start from (often just a single genesis block).
+    genesis_set: BTreeSet<Block>,
     /// Parameters for the network and the simulation.
     params: SimulationParams,
     /// Parameters for nodes.
@@ -71,12 +73,13 @@ pub struct Simulation {
 }
 
 impl Simulation {
+    /// Create a new simulation with a single seed node.
     pub fn new(params: SimulationParams, node_params: NodeParams) -> Self {
         let mut nodes = BTreeMap::new();
 
         let first_name = random();
-        let genesis = Block::genesis(first_name);
-        let first_node = Node::first(first_name, genesis.clone(), node_params.clone());
+        let genesis_set = btreeset!{ Block::genesis(first_name) };
+        let first_node = Node::active(first_name, genesis_set.clone(), node_params.clone());
         nodes.insert(first_name, first_node);
 
         for _ in 0..(params.num_nodes - 1) {
@@ -88,12 +91,35 @@ impl Simulation {
 
         Simulation {
             nodes,
-            genesis,
+            genesis_set,
             network,
             params,
             node_params,
             connections,
             disconnected: BTreeSet::new(),
+        }
+    }
+
+    /// Create a new simulation with sections whose prefixes and sizes are specified by `sections`.
+    ///
+    /// Note: the `num_nodes` parameter is entirely ignored by this constructor.
+    pub fn new_from(sections: BTreeMap<Prefix, usize>,
+                    params: SimulationParams,
+                    node_params: NodeParams) -> Self
+    {
+        let (nodes, genesis_set) = generate_network(&sections, node_params.clone());
+
+        let connections = Self::complete_connections(nodes.keys().cloned().collect());
+        let network = Network::new(params.max_delay);
+
+        Simulation {
+            nodes,
+            genesis_set,
+            network,
+            params,
+            node_params,
+            connections,
+            disconnected: BTreeSet::new()
         }
     }
 
@@ -129,13 +155,13 @@ impl Simulation {
                  })
             .collect();
 
-        // Make the node active, and let it build its way up from the genesis block.
-        let genesis = self.genesis.clone();
+        // Make the node active, and let it build its way up from the genesis block(s).
+        let genesis_set = self.genesis_set.clone();
         let params = self.node_params.clone();
         self.nodes
             .get_mut(&joining)
             .unwrap()
-            .make_active(joining, genesis, params);
+            .make_active(joining, genesis_set, params);
 
         messages
     }

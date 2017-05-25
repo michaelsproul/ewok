@@ -8,7 +8,6 @@ use peer_state::{PeerStates, nodes_in_all, nodes_in_any};
 use params::NodeParams;
 use split::split_blocks;
 
-use std::iter::FromIterator;
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
 use std::fmt;
@@ -22,8 +21,8 @@ pub enum Node {
 }
 
 impl Node {
-    pub fn first(name: Name, genesis: Block, params: NodeParams) -> Self {
-        Active(ActiveNode::new(name, genesis, params))
+    pub fn active(name: Name, current_blocks: CurrentBlocks, params: NodeParams) -> Self {
+        Active(ActiveNode::new(name, current_blocks, params))
     }
 
     pub fn joining() -> Self {
@@ -48,9 +47,9 @@ impl Node {
         *self = Dead;
     }
 
-    pub fn make_active(&mut self, name: Name, genesis: Block, params: NodeParams) {
+    pub fn make_active(&mut self, name: Name, blocks: CurrentBlocks, params: NodeParams) {
         println!("Node({}): starting up!", name);
-        *self = Active(ActiveNode::new(name, genesis, params));
+        *self = Active(ActiveNode::new(name, blocks, params));
     }
 
     /// Returns true if this node is active, the peer is known and its state is `Disconnected`.
@@ -86,16 +85,22 @@ impl fmt::Display for ActiveNode {
 }
 
 impl ActiveNode {
-    pub fn new(name: Name, genesis: Block, params: NodeParams) -> Self {
-        ActiveNode {
+    /// Create a new node which starts from a given set of valid and current blocks.
+    pub fn new(name: Name, current_blocks: CurrentBlocks, params: NodeParams) -> Self {
+        let mut node = ActiveNode {
             our_name: name,
-            valid_blocks: BTreeSet::from_iter(vec![genesis.clone()]),
-            current_blocks: BTreeSet::from_iter(vec![genesis]),
+            valid_blocks: current_blocks.clone(),
+            current_blocks,
             vote_counts: BTreeMap::new(),
             peer_states: PeerStates::new(params.clone()),
             message_filter: BTreeSet::new(),
             params,
-        }
+        };
+
+        // Update the peer states immediately so that genesis nodes are considered confirmed.
+        node.update_peer_states(0);
+
+        node
     }
 
     /// Minimum size that all sections must be before splitting.

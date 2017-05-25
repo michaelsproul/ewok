@@ -1,22 +1,7 @@
-extern crate rand;
-extern crate itertools;
-#[macro_use]
-extern crate maplit;
+extern crate ewok;
 
-mod block;
-mod consistency;
-mod message;
-mod name;
-mod network;
-mod node;
-mod params;
-mod peer_state;
-mod random;
-mod simulation;
-mod split;
-
-use simulation::Simulation;
-use params::{SimulationParams, NodeParams};
+use ewok::simulation::Simulation;
+use ewok::params::{SimulationParams, NodeParams};
 
 fn main() {
     let params = SimulationParams {

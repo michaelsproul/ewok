@@ -8,8 +8,9 @@ use name::{Name, Prefix};
 use block::Block;
 use generate::generate_network;
 use consistency::check_consistency;
-use message::Message;
-use message::MessageContent::*;
+use message::Event;
+use message::Content;
+use message::Notification::*;
 use params::{NodeParams, SimulationParams};
 use random::{random, sample, sample_single, do_with_probability};
 use self::detail::DisconnectedPair;
@@ -138,7 +139,7 @@ impl Simulation {
     }
 
     /// Choose a currently waiting node and start its join process.
-    fn join_node(&mut self) -> Vec<Message> {
+    fn join_node(&mut self) -> Vec<Event> {
         let joining = match self.find_joining_node() {
             Some(name) => name,
             None => return vec![],
@@ -147,10 +148,10 @@ impl Simulation {
         // TODO: send only to this node's section (for now, send to the whole network).
         let messages = self.active_nodes()
             .map(|(&neighbour, _)| {
-                     Message {
-                         sender: joining,
-                         recipient: neighbour,
-                         content: NodeJoined,
+                     Event {
+                         src: joining,
+                         dst: neighbour,
+                         content: Content::Notification(NodeJoined),
                      }
                  })
             .collect();
@@ -167,7 +168,7 @@ impl Simulation {
     }
 
     /// Drop an existing node if one exists to drop.
-    fn drop_node(&mut self) -> Vec<Message> {
+    fn drop_node(&mut self) -> Vec<Event> {
         let leaving_node = match sample_single(self.active_nodes()) {
             Some((name, _)) => *name,
             None => return vec![],
@@ -183,10 +184,10 @@ impl Simulation {
         let messages = self.active_nodes()
             .filter(|&(&neighbour, _)| self.connections.contains(&(neighbour, leaving_node)))
             .map(|(&neighbour, _)| {
-                     Message {
-                         sender: leaving_node,
-                         recipient: neighbour,
-                         content: ConnectionLost,
+                     Event {
+                         src: leaving_node,
+                         dst: neighbour,
+                         content: Content::Notification(ConnectionLost),
                      }
                  })
             .collect();
@@ -203,7 +204,7 @@ impl Simulation {
     }
 
     /// Kill a connection between a pair of nodes which aren't already disconnected.
-    fn disconnect_pair(&mut self) -> Vec<Message> {
+    fn disconnect_pair(&mut self) -> Vec<Event> {
         let mut pair;
         loop {
             let rnd_pair = sample(self.active_nodes(), 2);
@@ -220,15 +221,15 @@ impl Simulation {
         println!("Node({}) and Node({}) disconnecting from each other...",
                  pair.lower(),
                  pair.higher());
-        let messages = vec![Message {
-                                sender: pair.lower(),
-                                recipient: pair.higher(),
-                                content: ConnectionLost,
+        let messages = vec![Event {
+                                src: pair.lower(),
+                                dst: pair.higher(),
+                                content: Content::Notification(ConnectionLost),
                             },
-                            Message {
-                                sender: pair.higher(),
-                                recipient: pair.lower(),
-                                content: ConnectionLost,
+                            Event {
+                                src: pair.higher(),
+                                dst: pair.lower(),
+                                content: Content::Notification(ConnectionLost),
                             }];
 
         let _ = self.connections.remove(&(pair.lower(), pair.higher()));
@@ -239,7 +240,7 @@ impl Simulation {
 
     /// Try to reconnect all pairs of nodes which have previously become disconnected. Each pair
     /// will only succeed with `SimulationParams::prob_reconnect` probability.
-    fn reconnect_pairs(&mut self) -> Vec<Message> {
+    fn reconnect_pairs(&mut self) -> Vec<Event> {
         let disconnected = mem::replace(&mut self.disconnected, BTreeSet::new());
         let mut messages = vec![];
         for pair in disconnected {
@@ -252,15 +253,15 @@ impl Simulation {
                          pair.higher());
                 let _ = self.connections.insert((pair.lower(), pair.higher()));
                 let _ = self.connections.insert((pair.higher(), pair.lower()));
-                messages.push(Message {
-                                  sender: pair.lower(),
-                                  recipient: pair.higher(),
-                                  content: ConnectionRegained,
+                messages.push(Event {
+                                  src: pair.lower(),
+                                  dst: pair.higher(),
+                                  content: Content::Notification(ConnectionRegained),
                               });
-                messages.push(Message {
-                                  sender: pair.higher(),
-                                  recipient: pair.lower(),
-                                  content: ConnectionRegained,
+                messages.push(Event {
+                                  src: pair.higher(),
+                                  dst: pair.lower(),
+                                  content: Content::Notification(ConnectionRegained),
                               });
             } else {
                 let _ = self.disconnected.insert(pair);
@@ -291,19 +292,17 @@ impl Simulation {
         }
     }
 
-    fn message_allowed(&self, message: &Message) -> bool {
-        match message.content {
-            VoteMsg(..) |
-            VoteAgreedMsg(..) |
-            BootstrapMsg(..) => {
-                !self.nodes[&message.sender].is_disconnected_from(&message.recipient) &&
-                !self.nodes[&message.recipient].is_disconnected_from(&message.sender)
+    fn event_allowed(&self, event: &Event) -> bool {
+        match event.content {
+            Content::Message(..) => {
+                !self.nodes[&event.src].is_disconnected_from(&event.dst) &&
+                !self.nodes[&event.dst].is_disconnected_from(&event.src)
             }
-            NodeJoined | ConnectionRegained => {
+            Content::Notification(NodeJoined) | Content::Notification(ConnectionRegained) => {
                 self.connections
-                    .contains(&(message.sender, message.recipient))
+                    .contains(&(event.src, event.dst))
             }
-            ConnectionLost => true,
+            Content::Notification(ConnectionLost) => true,
         }
     }
 
@@ -339,19 +338,19 @@ impl Simulation {
 
             let delivered = self.network.receive(step);
 
-            for message in delivered {
-                if !self.message_allowed(&message) {
-                    println!("dropping this message: {:?}", message);
+            for event in delivered {
+                if !self.event_allowed(&event) {
+                    println!("dropping this message: {:?}", event);
                     continue;
                 }
 
-                match *self.nodes.get_mut(&message.recipient).unwrap() {
+                match *self.nodes.get_mut(&event.dst).unwrap() {
                     Active(ref mut node) => {
-                        let new_messages = node.handle_message(message, step);
+                        let new_messages = node.handle_event(event, step);
                         self.network.send(step, new_messages);
                     }
                     Dead => {
-                        println!("dropping message for dead node {}", message.recipient);
+                        println!("dropping message for dead node {}", event.dst);
                     }
                     WaitingToJoin => panic!("invalid"),
                 }

@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use message::Message;
+use message::Event;
 use name::Name;
 
 use random::do_with_probability;
@@ -11,7 +11,7 @@ pub struct Network {
     /// Probability that a message is delivered on a given step.
     prob_deliver: f64,
     /// Map from a connection between two nodes and step # to messages inserted at that step.
-    messages: BTreeMap<(Name, Name), BTreeMap<u64, Vec<Message>>>,
+    messages: BTreeMap<(Name, Name), BTreeMap<u64, Vec<Event>>>,
 }
 
 impl Network {
@@ -38,7 +38,7 @@ impl Network {
     }
 
     /// Get messages delivered at the given step (randomised).
-    pub fn receive(&mut self, step: u64) -> Vec<Message> {
+    pub fn receive(&mut self, step: u64) -> Vec<Event> {
         let start_step = step.saturating_sub(self.max_delay);
         let prob_deliver = self.prob_deliver;
 
@@ -51,11 +51,11 @@ impl Network {
     /// Get messages delivered on a single connection at a given step.
     ///
     /// `conn_messages`: the messages for a single connection as contained in `self.messages`.
-    fn receive_from_conn(conn_messages: &mut BTreeMap<u64, Vec<Message>>,
+    fn receive_from_conn(conn_messages: &mut BTreeMap<u64, Vec<Event>>,
                          prob_deliver: f64,
                          start_step: u64,
                          end_step: u64)
-                         -> Vec<Message> {
+                         -> Vec<Event> {
         let mut all_deliver = vec![];
 
         // Check that old messages which should have been delivered, have been.
@@ -90,13 +90,13 @@ impl Network {
     }
 
     /// Send messages at the given step.
-    pub fn send(&mut self, step: u64, messages: Vec<Message>) {
-        for message in messages {
+    pub fn send(&mut self, step: u64, events: Vec<Event>) {
+        for event in events {
             let conn_messages = self.messages
-                .entry((message.sender, message.recipient))
+                .entry((event.src, event.dst))
                 .or_insert_with(BTreeMap::new);
             let step_messages = conn_messages.entry(step).or_insert_with(Vec::new);
-            step_messages.push(message);
+            step_messages.push(event);
         }
     }
 }

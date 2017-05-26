@@ -1,6 +1,7 @@
-use message::Message;
-use message::MessageContent;
-use message::MessageContent::*;
+use message::{Event, Message, Content};
+use message::Message::*;
+use message::Notification::*;
+
 use name::Name;
 use block::{Block, Vote, ValidBlocks, CurrentBlocks, VoteCounts, new_valid_blocks,
             compute_current_blocks, our_blocks, section_blocks};
@@ -74,7 +75,7 @@ pub struct ActiveNode {
     /// States for peers.
     pub peer_states: PeerStates,
     /// Filter for messages we've already sent and shouldn't resend.
-    pub message_filter: BTreeSet<Message>,
+    pub message_filter: BTreeSet<Event>,
     /// Network configuration parameters.
     pub params: NodeParams,
 }
@@ -168,7 +169,7 @@ impl ActiveNode {
     }
 
     /// Add a block to our local cache, and update our current and valid blocks.
-    pub fn add_vote<I>(&mut self, vote: Vote, voted_for: I) -> Vec<Message>
+    pub fn add_vote<I>(&mut self, vote: Vote, voted_for: I) -> Vec<Event>
         where I: IntoIterator<Item = Name>
     {
         // Add vote to cache.
@@ -194,16 +195,16 @@ impl ActiveNode {
     }
 
     /// Create messages for every relevant neighbour for every vote in the given vec.
-    pub fn broadcast(&self, msgs: Vec<MessageContent>) -> Vec<Message> {
+    pub fn broadcast(&self, msgs: Vec<Message>) -> Vec<Event> {
         self.neighbouring_nodes()
             .into_iter()
             .flat_map(|neighbour| {
                 msgs.iter()
-                    .map(move |content| {
-                             Message {
-                                 sender: self.our_name,
-                                 recipient: neighbour,
-                                 content: content.clone(),
+                    .map(move |message| {
+                             Event {
+                                 src: self.our_name,
+                                 dst: neighbour,
+                                 content: Content::Message(message.clone()),
                              }
                          })
             })
@@ -276,7 +277,7 @@ impl ActiveNode {
         votes
     }
 
-    pub fn broadcast_new_votes(&mut self, step: u64) -> Vec<Message> {
+    pub fn broadcast_new_votes(&mut self, step: u64) -> Vec<Event> {
         let votes = self.construct_new_votes(step);
         let our_name = self.our_name;
 
@@ -297,16 +298,16 @@ impl ActiveNode {
     }
 
     /// Create a message with all our votes to send to a new node.
-    fn construct_bootstrap_msg(&self, joining_node: Name) -> Message {
-        Message {
-            sender: self.our_name,
-            recipient: joining_node,
-            content: BootstrapMsg(self.vote_counts.clone()),
+    fn construct_bootstrap_msg(&self, joining_node: Name) -> Event {
+        Event {
+            src: self.our_name,
+            dst: joining_node,
+            content: Content::Message(BootstrapMsg(self.vote_counts.clone())),
         }
     }
 
     /// Apply a bootstrap message received from another node.
-    fn apply_bootstrap_msg(&mut self, vote_counts: VoteCounts) -> Vec<Message> {
+    fn apply_bootstrap_msg(&mut self, vote_counts: VoteCounts) -> Vec<Event> {
         let mut to_send = vec![];
         for (vote, voters) in vote_counts {
             let our_votes = self.add_vote(vote, voters);
@@ -316,10 +317,10 @@ impl ActiveNode {
     }
 
     /// Handle a message intended for us and return messages we'd like to send.
-    pub fn handle_message(&mut self, message: Message, step: u64) -> Vec<Message> {
-        let mut to_send = match message.content {
-            NodeJoined => {
-                let joining_node = message.sender;
+    pub fn handle_event(&mut self, event: Event, step: u64) -> Vec<Event> {
+        let mut to_send = match event.content {
+            Content::Notification(NodeJoined) => {
+                let joining_node = event.src;
                 println!("{}: received join message for: {}", self, joining_node);
 
                 // Mark the peer as having joined so that we vote to keep adding it.
@@ -330,35 +331,35 @@ impl ActiveNode {
                 messages.push(self.construct_bootstrap_msg(joining_node));
                 messages
             }
-            VoteMsg(vote) => {
-                println!("{}: received {:?} from {}", self, vote, message.sender);
-                let mut msgs = self.add_vote(vote, Some(message.sender));
+            Content::Message(VoteMsg(vote)) => {
+                println!("{}: received {:?} from {}", self, vote, event.src);
+                let mut msgs = self.add_vote(vote, Some(event.src));
                 msgs.extend(self.broadcast_new_votes(step));
                 msgs
             }
-            VoteAgreedMsg((vote, voters)) => {
+            Content::Message(VoteAgreedMsg((vote, voters))) => {
                 println!("{}: received agreement for {:?} from {}",
                          self,
                          vote,
-                         message.sender);
+                         event.src);
                 let mut msgs = self.add_vote(vote, voters);
                 msgs.extend(self.broadcast_new_votes(step));
                 msgs
             }
-            BootstrapMsg(vote_counts) => {
+            Content::Message(BootstrapMsg(vote_counts)) => {
                 println!("{}: applying bootstrap message from {}",
                          self,
-                         message.sender);
+                         event.src);
                 self.apply_bootstrap_msg(vote_counts)
             }
-            ConnectionLost => {
-                println!("{}: lost our connection to {}", self, message.sender);
-                self.peer_states.disconnected(message.sender, step);
+            Content::Notification(ConnectionLost) => {
+                println!("{}: lost our connection to {}", self, event.src);
+                self.peer_states.disconnected(event.src, step);
                 self.broadcast_new_votes(step)
             }
-            ConnectionRegained => {
-                println!("{}: regained our connection to {}", self, message.sender);
-                self.peer_states.reconnected(message.sender, step);
+            Content::Notification(ConnectionRegained) => {
+                println!("{}: regained our connection to {}", self, event.src);
+                self.peer_states.reconnected(event.src, step);
                 self.broadcast_new_votes(step)
             }
         };

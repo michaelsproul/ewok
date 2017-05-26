@@ -7,7 +7,7 @@ use event::Event;
 use random::{random, do_with_probability};
 
 pub struct RandomEvents {
-    params: SimulationParams
+    params: SimulationParams,
 }
 
 impl RandomEvents {
@@ -50,5 +50,3 @@ impl RandomEvents {
         sample_single(nodes.iter()).map(|(name, _)| *name)
     }
 }
-
-

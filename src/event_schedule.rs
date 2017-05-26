@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 ///
 /// You specify the event, and the step number at which you'd like it to occur.
 pub struct EventSchedule {
-    pub schedule: BTreeMap<u64, Vec<Event>>
+    pub schedule: BTreeMap<u64, Vec<Event>>,
 }
 
 impl EventSchedule {
@@ -16,13 +16,14 @@ impl EventSchedule {
     }
 
     pub fn empty() -> Self {
-        EventSchedule {
-            schedule: BTreeMap::new(),
-        }
+        EventSchedule { schedule: BTreeMap::new() }
     }
 
     /// Fetch events occuring at the given step.
     pub fn get_events(&self, step: u64) -> Vec<Event> {
-        self.schedule.get(&step).cloned().unwrap_or_else(Vec::new)
+        self.schedule
+            .get(&step)
+            .cloned()
+            .unwrap_or_else(Vec::new)
     }
 }

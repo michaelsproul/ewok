@@ -15,7 +15,7 @@ const MAX_GUESSES: usize = 1000;
 ///
 /// `sections`: map from prefix to desired size for that section.
 pub fn generate_network(sections: &BTreeMap<Prefix, usize>,
-                        params: NodeParams)
+                        params: &NodeParams)
                         -> (BTreeMap<Name, Node>, CurrentBlocks) {
     // Check that the supplied prefixes describe a whole network.
     assert!(Prefix::new(0, Name(0)).is_covered_by(sections.keys()),

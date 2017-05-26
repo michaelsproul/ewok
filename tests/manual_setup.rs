@@ -10,14 +10,14 @@ use ewok::params::{SimulationParams, NodeParams};
 
 fn default_params() -> SimulationParams {
     SimulationParams {
-        num_nodes: 0,
+        max_num_nodes: 0,
         prob_join: 0.0,
         num_steps: 1000,
         max_delay: 5,
         prob_drop: 0.00,
         drop_step: 0,
         prob_disconnect: 0.00,
-        prob_reconnect: 0.00
+        prob_reconnect: 0.00,
     }
 }
 
@@ -25,7 +25,7 @@ fn default_node_params() -> NodeParams {
     NodeParams {
         min_section_size: 10,
         split_buffer: 1,
-        join_timeout: 10
+        join_timeout: 10,
     }
 }
 

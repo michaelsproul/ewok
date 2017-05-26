@@ -56,7 +56,7 @@ fn select_node_to_remove(prefix: Prefix, nodes: &BTreeMap<Name, Node>) -> Option
 }
 
 fn remove_node(to_remove: Name, nodes: &BTreeMap<Name, Node>) -> Vec<Message> {
-    // TODO: only send to this node's section(s).
+    // TODO: only send to this node's connected peers.
     // TODO: consider connections again?
     nodes
         .iter()

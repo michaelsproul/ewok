@@ -1,8 +1,7 @@
-// TODO: consider getting rid of "num_nodes" parameter?
 #[derive(Clone, Debug)]
 pub struct SimulationParams {
-    /// Number of nodes.
-    pub num_nodes: u64,
+    /// Maximum number of nodes.
+    pub max_num_nodes: usize,
     /// Number of steps to run the simulation for.
     pub num_steps: u64,
     /// Maximum number of steps a message can be delayed by before it's delivered.

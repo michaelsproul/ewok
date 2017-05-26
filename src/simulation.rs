@@ -5,7 +5,6 @@ use network::Network;
 use event::Event;
 use event_schedule::EventSchedule;
 use node::Node;
-use node::Node::*;
 use name::{Name, Prefix};
 use block::Block;
 use generate::generate_network;
@@ -13,7 +12,7 @@ use consistency::check_consistency;
 use message::Message;
 use message::MessageContent::*;
 use params::{NodeParams, SimulationParams};
-use random::{random, sample, do_with_probability};
+use random::{sample, do_with_probability};
 use random_events::RandomEvents;
 use self::detail::DisconnectedPair;
 
@@ -82,33 +81,10 @@ pub struct Simulation {
 impl Simulation {
     /// Create a new simulation with a single seed node.
     pub fn new(params: SimulationParams, node_params: NodeParams) -> Self {
-        let mut nodes = BTreeMap::new();
-
-        let first_name = random();
-        let genesis_set = btreeset!{ Block::genesis(first_name) };
-        let first_node = Node::active(first_name, genesis_set.clone(), node_params.clone());
-        nodes.insert(first_name, first_node);
-
-        for _ in 0..(params.num_nodes - 1) {
-            nodes.insert(random(), Node::joining());
-        }
-
-        let connections = Self::complete_connections(nodes.keys().cloned().collect());
-        let network = Network::new(params.max_delay);
-
-        let random_events = RandomEvents::new(params.clone());
-
-        Simulation {
-            nodes,
-            genesis_set,
-            network,
-            params,
-            node_params,
-            connections,
-            disconnected: BTreeSet::new(),
-            random_events,
-            event_schedule: EventSchedule::empty(),
-        }
+        let single_node_genesis = btreemap! {
+            Prefix::new(0, Name(0)) => 1
+        };
+        Self::new_from(single_node_genesis, EventSchedule::empty(), params, node_params)
     }
 
     /// Create a new simulation with sections whose prefixes and sizes are specified by `sections`.
@@ -139,26 +115,24 @@ impl Simulation {
         }
     }
 
-    fn active_nodes<'a>(&'a self) -> Box<Iterator<Item = (&'a Name, &'a Node)> + 'a> {
-        let active_nodes = self.nodes.iter().filter(|&(_, node)| node.is_active());
-        Box::new(active_nodes)
-    }
-
     fn apply_add_node(&mut self, joining: Name) {
         // Make the node active, and let it build its way up from the genesis block(s).
         let genesis_set = self.genesis_set.clone();
         let params = self.node_params.clone();
-        self.nodes
-            .get_mut(&joining)
-            .unwrap()
-            .make_active(joining, genesis_set, params);
+        let node = Node::new(joining, genesis_set, params);
+
+        // TODO: only add connections to this node's section(s).
+        let whole_network = self.nodes.keys().map(|k| *k).collect();
+        self.add_connections(joining, whole_network);
+
+        self.nodes.insert(joining, node);
     }
 
     fn apply_remove_node(&mut self, leaving_node: Name) {
         println!("Node({}): dying...", leaving_node);
 
-        // Mark the node dead.
-        self.nodes.get_mut(&leaving_node).unwrap().kill();
+        // Remove the node.
+        self.nodes.remove(&leaving_node);
 
         // Block the connections to and from this node.
         self.block_all_connections(leaving_node);
@@ -181,7 +155,7 @@ impl Simulation {
     fn disconnect_pair(&mut self) -> Vec<Message> {
         let mut pair;
         loop {
-            let rnd_pair = sample(self.active_nodes(), 2);
+            let rnd_pair = sample(&self.nodes, 2);
             if rnd_pair.len() != 2 {
                 return vec![];
             }
@@ -244,6 +218,14 @@ impl Simulation {
         messages
     }
 
+    /// Add new connections from `new_node` to all the nodes in `neighbours`.
+    fn add_connections(&mut self, new_node: Name, neighbours: BTreeSet<Name>) {
+        for neighbour in neighbours {
+            self.connections.insert((new_node, neighbour));
+            self.connections.insert((neighbour, new_node));
+        }
+    }
+
     fn complete_connections(names: Vec<Name>) -> BTreeSet<(Name, Name)> {
         let mut connections = BTreeSet::new();
         for n1 in &names {
@@ -267,12 +249,18 @@ impl Simulation {
     }
 
     fn message_allowed(&self, message: &Message) -> bool {
+        let (sender, recipient) = match (self.nodes.get(&message.sender),
+                                         self.nodes.get(&message.recipient)) {
+            (Some(s), Some(r)) => (s, r),
+            _ => return false,
+        };
+
         match message.content {
             VoteMsg(..) |
             VoteAgreedMsg(..) |
             BootstrapMsg(..) => {
-                !self.nodes[&message.sender].is_disconnected_from(&message.recipient) &&
-                !self.nodes[&message.recipient].is_disconnected_from(&message.sender)
+                !sender.is_disconnected_from(&message.recipient) &&
+                !recipient.is_disconnected_from(&message.sender)
             }
             NodeJoined | ConnectionRegained => {
                 self.connections
@@ -341,31 +329,28 @@ impl Simulation {
                 if !self.message_allowed(&message) {
                     // Requeue if the recipient is still active, and we haven't yet
                     // entered into the "no more messages" phase.
-                    if self.nodes[&message.recipient].is_active() &&
+                    if self.nodes.contains_key(&message.recipient) &&
                        step < self.params.num_steps {
                         to_requeue.push(message);
                     }
                     continue;
                 }
 
-                match *self.nodes.get_mut(&message.recipient).unwrap() {
-                    Active(ref mut node) => {
+                match self.nodes.get_mut(&message.recipient) {
+                    Some(node) => {
                         let new_messages = node.handle_message(message, step);
                         self.network.send(step, new_messages);
                     }
-                    Dead => {
+                    None => {
                         println!("dropping message for dead node {}", message.recipient);
                     }
-                    WaitingToJoin => panic!("invalid"),
                 }
             }
         }
 
         println!("-- final node states --");
         for node in self.nodes.values() {
-            if let Active(ref node) = *node {
-                println!("{}: current_blocks: {:#?}", node, node.current_blocks);
-            }
+            println!("{}: current_blocks: {:#?}", node, node.current_blocks);
         }
 
         assert!(ran_to_completion,

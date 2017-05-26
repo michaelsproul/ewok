@@ -39,7 +39,6 @@ impl Event {
 fn add_node(joining_node: Name, nodes: &BTreeMap<Name, Node>) -> Vec<Message> {
     // TODO: send only to this node's section(s).
     nodes.iter()
-        .filter(|&(_, node)| node.is_active())
         .map(|(&neighbour, _)| {
             Message {
                 sender: joining_node,
@@ -52,7 +51,7 @@ fn add_node(joining_node: Name, nodes: &BTreeMap<Name, Node>) -> Vec<Message> {
 
 fn select_node_to_remove(prefix: Prefix, nodes: &BTreeMap<Name, Node>) -> Option<Name> {
     nodes.iter()
-        .filter(move |&(name, node)| node.is_active() && prefix.matches(*name))
+        .filter(move |&(name, _)| prefix.matches(*name))
         .map(|(name, _)| *name)
         .next()
 }
@@ -61,7 +60,6 @@ fn remove_node(to_remove: Name, nodes: &BTreeMap<Name, Node>) -> Vec<Message> {
     // TODO: only send to this node's section(s).
     // TODO: consider connections again?
     nodes.iter()
-        .filter(|&(_, node)| node.is_active())
         .map(|(&neighbour, _)| {
             Message {
                 sender: to_remove,

@@ -35,7 +35,7 @@ pub fn generate_network(sections: &BTreeMap<Prefix, usize>,
     let nodes = nodes_by_section
         .into_iter()
         .flat_map(|(_, names)| names)
-        .map(|name| (name, Node::active(name, current_blocks.clone(), params.clone())))
+        .map(|name| (name, Node::new(name, current_blocks.clone(), params.clone())))
         .collect();
 
     (nodes, current_blocks)

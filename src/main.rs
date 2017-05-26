@@ -5,7 +5,7 @@ use ewok::params::{SimulationParams, NodeParams};
 
 fn main() {
     let params = SimulationParams {
-        num_nodes: 30,
+        max_num_nodes: 30,
         num_steps: 1150,
         max_delay: 5,
         prob_join: 0.1,
@@ -24,5 +24,5 @@ fn main() {
 
     let mut simulation = Simulation::new(params, node_params);
 
-    simulation.run().unwrap();
+    simulation.run().expect("network consistency");
 }

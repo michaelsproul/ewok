@@ -13,56 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
 use std::fmt;
 
-use self::Node::*;
-
-pub enum Node {
-    WaitingToJoin,
-    Dead,
-    Active(ActiveNode),
-}
-
-impl Node {
-    pub fn active(name: Name, current_blocks: CurrentBlocks, params: NodeParams) -> Self {
-        Active(ActiveNode::new(name, current_blocks, params))
-    }
-
-    pub fn joining() -> Self {
-        WaitingToJoin
-    }
-
-    pub fn is_joining(&self) -> bool {
-        match *self {
-            WaitingToJoin => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_active(&self) -> bool {
-        match *self {
-            Active(..) => true,
-            _ => false,
-        }
-    }
-
-    pub fn kill(&mut self) {
-        *self = Dead;
-    }
-
-    pub fn make_active(&mut self, name: Name, blocks: CurrentBlocks, params: NodeParams) {
-        println!("Node({}): starting up!", name);
-        *self = Active(ActiveNode::new(name, blocks, params));
-    }
-
-    /// Returns true if this node is active, the peer is known and its state is `Disconnected`.
-    pub fn is_disconnected_from(&self, name: &Name) -> bool {
-        match *self {
-            Active(ref node) => node.peer_states.is_disconnected_from(name),
-            _ => false,
-        }
-    }
-}
-
-pub struct ActiveNode {
+pub struct Node {
     /// Our node's name.
     pub our_name: Name,
     /// All valid blocks.
@@ -79,16 +30,16 @@ pub struct ActiveNode {
     pub params: NodeParams,
 }
 
-impl fmt::Display for ActiveNode {
+impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "Node({})", self.our_name)
     }
 }
 
-impl ActiveNode {
+impl Node {
     /// Create a new node which starts from a given set of valid and current blocks.
     pub fn new(name: Name, current_blocks: CurrentBlocks, params: NodeParams) -> Self {
-        let mut node = ActiveNode {
+        let mut node = Node {
             our_name: name,
             valid_blocks: current_blocks.clone(),
             current_blocks,
@@ -313,6 +264,11 @@ impl ActiveNode {
             to_send.extend(our_votes);
         }
         to_send
+    }
+
+    /// Returns true if the peer is known and its state is `Disconnected`.
+    pub fn is_disconnected_from(&self, name: &Name) -> bool {
+        self.peer_states.is_disconnected_from(name)
     }
 
     /// Handle a message intended for us and return messages we'd like to send.

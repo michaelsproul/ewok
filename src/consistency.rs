@@ -1,5 +1,5 @@
 use name::Name;
-use node::Node::{self, Active};
+use node::Node;
 use std::collections::{BTreeMap, BTreeSet};
 use itertools::Itertools;
 
@@ -8,13 +8,11 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>, min_section_size: usize) 
     let mut sections = btreemap!{};
 
     for node in nodes.values() {
-        if let Active(ref active_node) = *node {
-            for block in &active_node.current_blocks {
-                let section_versions = sections
-                    .entry(block.prefix)
-                    .or_insert_with(BTreeSet::new);
-                section_versions.insert(block.clone());
-            }
+        for block in &node.current_blocks {
+            let section_versions = sections
+                .entry(block.prefix)
+                .or_insert_with(BTreeSet::new);
+            section_versions.insert(block.clone());
         }
     }
 

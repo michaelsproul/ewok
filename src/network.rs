@@ -99,4 +99,12 @@ impl Network {
             step_messages.push(message);
         }
     }
+
+    /// Whether the message/event queue is empty.
+    pub fn queue_is_empty(&self) -> bool {
+        self.messages
+            .values()
+            .flat_map(|messages| messages.values())
+            .all(|messages| messages.is_empty())
+    }
 }

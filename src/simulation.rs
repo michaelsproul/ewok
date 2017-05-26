@@ -307,39 +307,54 @@ impl Simulation {
         }
     }
 
+    /// Generate events to occur at the given step, and send messages for them.
+    pub fn generate_events(&mut self, step: u64) {
+        // Join an existing node if one exists, and it's been long enough since the last join.
+        if do_with_probability(self.params.prob_join) {
+            let join_messages = self.join_node();
+            self.network.send(step, join_messages);
+        }
+
+        // Remove an existing node if one exists, and we're past the stabilisation threshold.
+        if step >= self.params.drop_step && do_with_probability(self.params.prob_drop) {
+            let remove_messages = self.drop_node();
+            self.network.send(step, remove_messages);
+        }
+
+        // Kill a connection between two nodes if we're past the stabilisation threshold.
+        if step >= self.params.drop_step && do_with_probability(self.params.prob_disconnect) {
+            let disconnect_messages = self.disconnect_pair();
+            self.network.send(step, disconnect_messages);
+        }
+
+        // Try to reconnect any previously-disconnected pairs if we're past the stabilisation
+        // threshold. Exclude any which were disconnected in this step.
+        if step >= self.params.drop_step {
+            let reconnect_messages = self.reconnect_pairs();
+            self.network.send(step, reconnect_messages);
+        }
+    }
+
     /// Run the simulation, returning Ok iff the network was consistent upon termination.
     pub fn run(&mut self) -> Result<(), ()> {
+        let max_extra_steps = 1000;
+        let mut ran_to_completion = false;
         let mut to_requeue = vec![];
 
-        for step in 0..self.params.num_steps {
+        for step in 0..(self.params.num_steps + max_extra_steps) {
             println!("-- step {} --", step);
 
             // Requeue messages that failed to be delivered in the last step.
             self.network.send(step, to_requeue);
 
-            // Join an existing node if one exists, and it's been long enough since the last join.
-            if do_with_probability(self.params.prob_join) {
-                let join_messages = self.join_node();
-                self.network.send(step, join_messages);
-            }
-
-            // Remove an existing node if one exists, and we're past the stabilisation threshold.
-            if step >= self.params.drop_step && do_with_probability(self.params.prob_drop) {
-                let remove_messages = self.drop_node();
-                self.network.send(step, remove_messages);
-            }
-
-            // Kill a connection between two nodes if we're past the stabilisation threshold.
-            if step >= self.params.drop_step && do_with_probability(self.params.prob_disconnect) {
-                let disconnect_messages = self.disconnect_pair();
-                self.network.send(step, disconnect_messages);
-            }
-
-            // Try to reconnect any previously-disconnected pairs if we're past the stabilisation
-            // threshold. Exclude any which were disconnected in this step.
-            if step >= self.params.drop_step {
-                let reconnect_messages = self.reconnect_pairs();
-                self.network.send(step, reconnect_messages);
+            // Generate events.
+            // We only generate events for at most `num_steps` steps, after which point
+            // we wait for the network to empty out.
+            if step < self.params.num_steps {
+                self.generate_events(step);
+            } else if self.network.queue_is_empty() {
+                ran_to_completion = true;
+                break;
             }
 
             let delivered = self.network.receive(step);
@@ -347,8 +362,10 @@ impl Simulation {
 
             for message in delivered {
                 if !self.message_allowed(&message) {
-                    if self.nodes[&message.sender].is_active() &&
-                       self.nodes[&message.recipient].is_active() {
+                    // Requeue if the recipient is still active, and we haven't yet
+                    // entered into the "no more messages" phase.
+                    if self.nodes[&message.recipient].is_active() &&
+                       step < self.params.num_steps {
                         to_requeue.push(message);
                     }
                     continue;
@@ -373,6 +390,9 @@ impl Simulation {
                 println!("{}: current_blocks: {:#?}", node, node.current_blocks);
             }
         }
+
+        assert!(ran_to_completion,
+                "there were undelivered messages at termination");
 
         check_consistency(&self.nodes, self.node_params.min_section_size as usize)
     }

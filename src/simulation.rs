@@ -309,8 +309,13 @@ impl Simulation {
 
     /// Run the simulation, returning Ok iff the network was consistent upon termination.
     pub fn run(&mut self) -> Result<(), ()> {
+        let mut to_requeue = vec![];
+
         for step in 0..self.params.num_steps {
             println!("-- step {} --", step);
+
+            // Requeue messages that failed to be delivered in the last step.
+            self.network.send(step, to_requeue);
 
             // Join an existing node if one exists, and it's been long enough since the last join.
             if do_with_probability(self.params.prob_join) {
@@ -338,10 +343,14 @@ impl Simulation {
             }
 
             let delivered = self.network.receive(step);
+            to_requeue = vec![];
 
             for message in delivered {
                 if !self.message_allowed(&message) {
-                    println!("dropping this message: {:?}", message);
+                    if self.nodes[&message.sender].is_active() &&
+                       self.nodes[&message.recipient].is_active() {
+                        to_requeue.push(message);
+                    }
                     continue;
                 }
 

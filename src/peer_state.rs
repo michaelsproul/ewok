@@ -17,6 +17,8 @@ enum PeerState {
     },
     /// Waiting to join, has not yet been included in a current block.
     Unconfirmed { join_step: u64 },
+    /// Was confirmed, but dropped from some current blocks.
+    PartiallyLost { since: u64 },
     /// Currently disconnected from us.
     Disconnected {
         since: u64,
@@ -63,9 +65,17 @@ impl PeerStates {
         match *state {
             // Previously unconfirmed, upgrade to partially confirmed.
             // Previously confirmed, downgrade to partially confirmed.
-            Unconfirmed { .. } |
-            Confirmed => {
+            Unconfirmed { .. } => {
                 *state = PartiallyConfirmed { since: step };
+            }
+            Confirmed => {
+                *state = PartiallyLost { since: step };
+            }
+            PartiallyConfirmed { since } => {
+                // if added more than some period ago, we mark it as a candidate to be dropped
+                if since < step.saturating_sub(self.params.join_timeout) {
+                    *state = PartiallyLost { since: step };
+                }
             }
             _ => (),
         }
@@ -77,6 +87,7 @@ impl PeerStates {
 
         match *state {
             PartiallyConfirmed { .. } |
+            PartiallyLost { .. } |
             Unconfirmed { .. } => {
                 *state = Confirmed;
             }
@@ -136,14 +147,11 @@ impl PeerStates {
             .iter()
             .filter(|&(_, state)| {
                 match *state {
-                    // rule:AddRP
+                    // rule:Add
                     // candidate passed our resource proof in the last `join_timeout` steps.
                     Unconfirmed { join_step } => {
                         join_step >= step.saturating_sub(self.params.join_timeout)
                     }
-                    // rule:AddConv
-                    // nodes that appear in some current blocks but not all
-                    PartiallyConfirmed { .. } => true,
                     // anything else
                     _ => false,
                 }
@@ -153,16 +161,20 @@ impl PeerStates {
     }
 
     /// Return all nodes that we should vote to remove.
-    pub fn nodes_to_drop(&self, _step: u64) -> Vec<Name> {
+    pub fn nodes_to_drop(&self, step: u64) -> Vec<Name> {
         self.states
             .iter()
             .filter(|&(_, state)| {
-                        match *state {
-                            // rule:RmDc
-                            Disconnected { .. } => true,
-                            _ => false,
-                        }
-                    })
+                match *state {
+                    // rule:RmDc
+                    Disconnected { .. } => true,
+                    // rule:RmConv
+                    PartiallyLost { since } => {
+                        since < step.saturating_sub(self.params.join_timeout)
+                    }
+                    _ => false,
+                }
+            })
             .map(|(name, _)| *name)
             .collect()
     }

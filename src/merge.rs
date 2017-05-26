@@ -66,8 +66,8 @@ fn find_small_blocks<'a>(current_blocks: &'a CurrentBlocks,
 }
 
 fn is_sibling_of_ancestor(our_prefix: Prefix, target: Prefix) -> bool {
-    target.bit_count() < our_prefix.bit_count() && !target.is_prefix_of(our_prefix) &&
-    target.popped().is_prefix_of(our_prefix)
+    target.bit_count() < our_prefix.bit_count() && !target.is_prefix_of(&our_prefix) &&
+    target.popped().is_prefix_of(&our_prefix)
 }
 
 fn is_sibling(our_prefix: Prefix, target: Prefix) -> bool {

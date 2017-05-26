@@ -146,7 +146,10 @@ fn successors<'a>(vote_counts: &'a VoteCounts,
     let iter = vote_counts
         .iter()
         .filter(move |&(vote, _)| &vote.from == from)
-        .filter(|&(vote, _)| vote.to.is_admissible_after(&vote.from))
+        .filter(move |&(vote, _)| {
+                    vote.to.prefix.is_neighbour(&from.prefix) ||
+                    vote.to.is_admissible_after(&vote.from)
+                })
         .filter(|&(vote, voters)| is_quorum_of(voters, &vote.from.members))
         .map(|(vote, voters)| (vote.clone(), voters.clone()));
 
@@ -154,33 +157,26 @@ fn successors<'a>(vote_counts: &'a VoteCounts,
 }
 
 /// Compute the set of current blocks from a set of valid blocks.
-pub fn compute_current_blocks(mut valid_blocks: Vec<Block>) -> CurrentBlocks {
-    let mut current_blocks = btreeset!{};
-
-    // 1. Sort by descending version.
-    valid_blocks.sort_by(|b1, b2| b2.version.cmp(&b1.version));
-
-    // 2. Take blocks that have a prefix we haven't covered yet,
-    // or the same version as a prefix we have covered.
+pub fn compute_current_blocks(valid_blocks: Vec<Block>) -> CurrentBlocks {
+    // 1. Sort by version.
+    let mut blocks_by_version: BTreeMap<u64, BTreeSet<Block>> = btreemap!{};
     for block in valid_blocks {
-        let is_current = {
-            let compatible: Vec<_> = current_blocks
-                .iter()
-                .filter(|current: &&Block| current.prefix.is_compatible(block.prefix))
-                .collect();
+        let _ = blocks_by_version
+            .entry(block.version)
+            .or_insert_with(BTreeSet::new)
+            .insert(block);
+    }
 
-            if compatible.is_empty() {
-                true
-            } else {
-                compatible
-                    .iter()
-                    .any(|current| block.version == current.version)
-            }
-        };
-
-        if is_current {
-            current_blocks.insert(block);
-        }
+    // 2. Collect blocks not covered by higher-version prefixes.
+    let mut current_blocks: BTreeSet<Block> = btreeset!{};
+    let mut current_pfxs: BTreeSet<Prefix> = btreeset!{};
+    for (_, blocks) in blocks_by_version.into_iter().rev() {
+        let new_current: Vec<Block> = blocks
+            .into_iter()
+            .filter(|block| !block.prefix.is_covered_by(&current_pfxs))
+            .collect();
+        current_pfxs.extend(new_current.iter().map(|block| block.prefix));
+        current_blocks.extend(new_current);
     }
 
     current_blocks

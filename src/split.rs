@@ -59,7 +59,7 @@ fn neighbours_ok(block: &Block, current_blocks: &CurrentBlocks, min_split_size: 
         .iter()
         .filter(move |other_block| {
                     other_block.prefix.is_neighbour(&block.prefix) ||
-                    other_block.prefix.is_compatible(block.prefix)
+                    other_block.prefix.is_compatible(&block.prefix)
                 })
         .all(|other_block| other_block.members.len() >= min_split_size)
 }

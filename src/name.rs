@@ -154,13 +154,13 @@ impl Prefix {
     }
 
     /// Returns `true` if `self` is a prefix of `other` or vice versa.
-    pub fn is_compatible(&self, other: Prefix) -> bool {
+    pub fn is_compatible(&self, other: &Prefix) -> bool {
         let i = self.name.common_prefix(other.name);
         i >= self.bit_count || i >= other.bit_count
     }
 
     /// Returns `true` if `self` is a prefix of `other`.
-    pub fn is_prefix_of(&self, other: Prefix) -> bool {
+    pub fn is_prefix_of(&self, other: &Prefix) -> bool {
         let i = self.name.common_prefix(other.name);
         i >= self.bit_count
     }
@@ -201,7 +201,7 @@ impl Prefix {
         prefixes
             .clone()
             .into_iter()
-            .any(|x| x.is_compatible(*self) && x.bit_count() <= self.bit_count()) ||
+            .any(|x| x.is_compatible(self) && x.bit_count() <= self.bit_count()) ||
         (self.bit_count() <= max_prefix_len &&
          self.pushed(false)
              .is_covered_by_impl(prefixes.clone(), max_prefix_len) &&
@@ -224,7 +224,7 @@ impl Prefix {
 
 impl PartialEq<Prefix> for Prefix {
     fn eq(&self, other: &Self) -> bool {
-        self.is_compatible(*other) && self.bit_count == other.bit_count
+        self.is_compatible(other) && self.bit_count == other.bit_count
     }
 }
 
@@ -232,7 +232,7 @@ impl PartialOrd<Prefix> for Prefix {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         if self == other {
             Some(Ordering::Equal)
-        } else if self.is_compatible(*other) {
+        } else if self.is_compatible(other) {
             None
         } else {
             Some(self.name.cmp(&other.name))

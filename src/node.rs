@@ -227,7 +227,7 @@ impl Node {
         votes
     }
 
-    pub fn broadcast_new_votes(&mut self, step: u64) -> Vec<Message> {
+    fn broadcast_new_votes(&mut self, step: u64) -> Vec<Message> {
         let votes = self.construct_new_votes(step);
         let our_name = self.our_name;
 
@@ -245,6 +245,14 @@ impl Node {
         self.update_peer_states(step);
 
         to_broadcast
+    }
+
+    /// Returns new votes to be broadcast after filtering them
+    pub fn filtered_broadcast_new_votes(&mut self, step: u64) -> Vec<Message> {
+        let mut to_send = self.broadcast_new_votes(step);
+        to_send.retain(|msg| !self.message_filter.contains(msg));
+        self.message_filter.extend(to_send.clone());
+        to_send
     }
 
     /// Create a message with all our votes to send to a new node.

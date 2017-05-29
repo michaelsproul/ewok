@@ -270,7 +270,8 @@ impl Simulation {
             }
             // Send pending votes independently of churn events
             for node in self.nodes.values_mut() {
-                self.network.send(step, node.broadcast_new_votes(step));
+                self.network
+                    .send(step, node.filtered_broadcast_new_votes(step));
             }
         }
 

@@ -62,15 +62,7 @@ pub struct Simulation {
     params: SimulationParams,
     /// Parameters for nodes.
     node_params: NodeParams,
-    /// Set of connections between nodes. Connections have a direction (from, to). Due to random
-    /// disconnects and reconnects, an entry here does not necessarily mean that both peers consider
-    /// themselves to be connected; they may have not yet handled the `ConnectionRegained`
-    /// pseudo-message. Similarly, their entries may have been removed from here, but they may not
-    /// have handled the corresponding `ConnectionLost`s.
-    connections: BTreeSet<(Name, Name)>,
-    /// Collection of disconnected pairs which should be trying to reconnect. These do not have a
-    /// direction, so in the case of a successful reconnect, one entry here will be removed and will
-    /// result in two entries being added to `connections`.
+    /// Collection of disconnected pairs which should be trying to reconnect.
     disconnected: BTreeSet<DisconnectedPair>,
     /// Generator of random events.
     random_events: RandomEvents,
@@ -98,11 +90,8 @@ impl Simulation {
                     params: SimulationParams,
                     node_params: NodeParams)
                     -> Self {
-        let (nodes, genesis_set) = generate_network(&sections, node_params.clone());
-
-        let connections = Self::complete_connections(nodes.keys().cloned().collect());
+        let (nodes, genesis_set) = generate_network(&sections, &node_params);
         let network = Network::new(params.max_delay);
-
         let random_events = RandomEvents::new(params.clone());
 
         Simulation {
@@ -111,7 +100,6 @@ impl Simulation {
             network,
             params,
             node_params,
-            connections,
             disconnected: BTreeSet::new(),
             random_events,
             event_schedule,
@@ -123,11 +111,6 @@ impl Simulation {
         let genesis_set = self.genesis_set.clone();
         let params = self.node_params.clone();
         let node = Node::new(joining, genesis_set, params);
-
-        // TODO: only add connections to this node's section(s).
-        let whole_network = self.nodes.keys().cloned().collect();
-        self.add_connections(joining, whole_network);
-
         self.nodes.insert(joining, node);
     }
 
@@ -137,8 +120,7 @@ impl Simulation {
         // Remove the node.
         self.nodes.remove(&leaving_node);
 
-        // Block the connections to and from this node.
-        self.block_all_connections(leaving_node);
+        // Remove any "disconnections" associated with this node.
         let disconnected = mem::replace(&mut self.disconnected, BTreeSet::new());
         self.disconnected = disconnected
             .into_iter()
@@ -183,8 +165,6 @@ impl Simulation {
                                 content: ConnectionLost,
                             }];
 
-        let _ = self.connections.remove(&(pair.lower(), pair.higher()));
-        let _ = self.connections.remove(&(pair.higher(), pair.lower()));
         let _ = self.disconnected.insert(pair);
         messages
     }
@@ -202,8 +182,6 @@ impl Simulation {
                 println!("Node({}) and Node({}) reconnecting to each other...",
                          pair.lower(),
                          pair.higher());
-                let _ = self.connections.insert((pair.lower(), pair.higher()));
-                let _ = self.connections.insert((pair.higher(), pair.lower()));
                 messages.push(Message {
                                   sender: pair.lower(),
                                   recipient: pair.higher(),
@@ -219,58 +197,6 @@ impl Simulation {
             }
         }
         messages
-    }
-
-    /// Add new connections from `new_node` to all the nodes in `neighbours`.
-    fn add_connections(&mut self, new_node: Name, neighbours: BTreeSet<Name>) {
-        for neighbour in neighbours {
-            self.connections.insert((new_node, neighbour));
-            self.connections.insert((neighbour, new_node));
-        }
-    }
-
-    fn complete_connections(names: Vec<Name>) -> BTreeSet<(Name, Name)> {
-        let mut connections = BTreeSet::new();
-        for n1 in &names {
-            for n2 in &names {
-                if n1 != n2 {
-                    connections.insert((*n1, *n2));
-                }
-            }
-        }
-        connections
-    }
-
-    fn block_all_connections(&mut self, name: Name) {
-        let connections = mem::replace(&mut self.connections, BTreeSet::new());
-
-        for (sender, recipient) in connections {
-            if sender != name && recipient != name {
-                self.connections.insert((sender, recipient));
-            }
-        }
-    }
-
-    fn message_allowed(&self, message: &Message) -> bool {
-        let (sender, recipient) = match (self.nodes.get(&message.sender),
-                                         self.nodes.get(&message.recipient)) {
-            (Some(s), Some(r)) => (s, r),
-            _ => return false,
-        };
-
-        match message.content {
-            VoteMsg(..) |
-            VoteAgreedMsg(..) |
-            BootstrapMsg(..) => {
-                !sender.is_disconnected_from(&message.recipient) &&
-                !recipient.is_disconnected_from(&message.sender)
-            }
-            NodeJoined | ConnectionRegained => {
-                self.connections
-                    .contains(&(message.sender, message.recipient))
-            }
-            ConnectionLost => true,
-        }
     }
 
     /// Generate events to occur at the given step, and send messages for them.
@@ -306,14 +232,13 @@ impl Simulation {
     /// Run the simulation, returning Ok iff the network was consistent upon termination.
     pub fn run(&mut self) -> Result<(), ()> {
         let max_extra_steps = 1000;
+        // TODO: Use actual max value (probably from `NodeParams`) once the RmConv rule is added.
+        let max_timeout_steps = 60;
+        let mut no_op_step_count = 0;
         let mut ran_to_completion = false;
-        let mut to_requeue = vec![];
 
         for step in 0..(self.params.num_steps + max_extra_steps) {
             println!("-- step {} --", step);
-
-            // Requeue messages that failed to be delivered in the last step.
-            self.network.send(step, to_requeue);
 
             // Generate events.
             // We only generate events for at most `num_steps` steps, after which point
@@ -321,23 +246,18 @@ impl Simulation {
             if step < self.params.num_steps {
                 self.generate_events(step);
             } else if self.network.queue_is_empty() {
-                ran_to_completion = true;
-                break;
+                if no_op_step_count > max_timeout_steps {
+                    ran_to_completion = true;
+                    break;
+                } else {
+                    no_op_step_count += 1;
+                }
+            } else {
+                no_op_step_count = 0;
             }
 
             let delivered = self.network.receive(step);
-            to_requeue = vec![];
-
             for message in delivered {
-                if !self.message_allowed(&message) {
-                    // Requeue if the recipient is still active, and we haven't yet
-                    // entered into the "no more messages" phase.
-                    if self.nodes.contains_key(&message.recipient) && step < self.params.num_steps {
-                        to_requeue.push(message);
-                    }
-                    continue;
-                }
-
                 match self.nodes.get_mut(&message.recipient) {
                     Some(node) => {
                         let new_messages = node.handle_message(message, step);

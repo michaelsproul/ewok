@@ -75,7 +75,7 @@ fn is_sibling(our_prefix: Prefix, target: Prefix) -> bool {
 }
 
 fn merged_block(b0: &Block, b1: &Block) -> Block {
-    assert!(b0.prefix.sibling() == Some(b1.prefix));
+    assert_eq!(b0.prefix.sibling(), Some(b1.prefix));
     Block {
         prefix: b0.prefix.popped(),
         version: ::std::cmp::max(b0.version, b1.version) + 1,

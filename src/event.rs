@@ -26,46 +26,46 @@ impl Event {
     }
 
     pub fn normalise(&mut self, nodes: &BTreeMap<Name, Node>) {
-        match *self {
-            RemoveNodeFrom(prefix) => {
-                let to_remove = select_node_to_remove(prefix, nodes).unwrap();
-                *self = RemoveNode(to_remove)
-            }
-            _ => ()
+        if let RemoveNodeFrom(prefix) = *self {
+            let to_remove = select_node_to_remove(prefix, nodes).unwrap();
+            *self = RemoveNode(to_remove)
         }
     }
 }
 
 fn add_node(joining_node: Name, nodes: &BTreeMap<Name, Node>) -> Vec<Message> {
     // TODO: send only to this node's section(s).
-    nodes.iter()
+    nodes
+        .iter()
         .map(|(&neighbour, _)| {
-            Message {
-                sender: joining_node,
-                recipient: neighbour,
-                content: NodeJoined,
-            }
-        })
+                 Message {
+                     sender: joining_node,
+                     recipient: neighbour,
+                     content: NodeJoined,
+                 }
+             })
         .collect()
 }
 
 fn select_node_to_remove(prefix: Prefix, nodes: &BTreeMap<Name, Node>) -> Option<Name> {
-    nodes.iter()
+    nodes
+        .iter()
         .filter(move |&(name, _)| prefix.matches(*name))
         .map(|(name, _)| *name)
         .next()
 }
 
 fn remove_node(to_remove: Name, nodes: &BTreeMap<Name, Node>) -> Vec<Message> {
-    // TODO: only send to this node's section(s).
+    // TODO: only send to this node's connected peers.
     // TODO: consider connections again?
-    nodes.iter()
+    nodes
+        .iter()
         .map(|(&neighbour, _)| {
-            Message {
-                sender: to_remove,
-                recipient: neighbour,
-                content: ConnectionLost,
-            }
-        })
+                 Message {
+                     sender: to_remove,
+                     recipient: neighbour,
+                     content: ConnectionLost,
+                 }
+             })
         .collect()
 }

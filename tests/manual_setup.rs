@@ -10,7 +10,7 @@ use ewok::params::{SimulationParams, NodeParams};
 
 fn default_params() -> SimulationParams {
     SimulationParams {
-        num_nodes: 0,
+        max_num_nodes: 0,
         prob_join: 0.0,
         num_steps: 1000,
         max_delay: 5,

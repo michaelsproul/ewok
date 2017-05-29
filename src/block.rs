@@ -157,7 +157,7 @@ fn successors<'a>(vote_counts: &'a VoteCounts,
 }
 
 /// Compute the set of current blocks from a set of valid blocks.
-pub fn compute_current_blocks(valid_blocks: Vec<Block>) -> CurrentBlocks {
+pub fn compute_current_blocks(valid_blocks: BTreeSet<Block>) -> CurrentBlocks {
     // 1. Sort by version.
     let mut blocks_by_version: BTreeMap<u64, BTreeSet<Block>> = btreemap!{};
     for block in valid_blocks {
@@ -215,4 +215,33 @@ pub fn blocks_for_prefix<'a>(blocks: &'a BTreeSet<Block>,
                              -> Box<Iterator<Item = &'a Block> + 'a> {
     let result = blocks.iter().filter(move |&b| b.prefix == prefix);
     Box::new(result)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn short_name(name: u8) -> Name {
+        Name((name as u64) << (64 - 8))
+    }
+
+    #[test]
+    fn covering() {
+        let valid_blocks = btreeset![
+            Block {
+                prefix: Prefix::empty(),
+                version: 0,
+                members: btreeset!{ Name(0), short_name(0b10000000) }
+            },
+            Block {
+                prefix: Prefix::short(1, 0),
+                version: 1,
+                members: btreeset!{ Name(0) }
+            },
+        ];
+
+        let current_blocks = compute_current_blocks(valid_blocks.clone());
+
+        assert_eq!(valid_blocks, current_blocks);
+    }
 }

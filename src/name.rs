@@ -119,6 +119,11 @@ impl Prefix {
         }
     }
 
+    /// The empty prefix, ().
+    pub fn empty() -> Prefix {
+        Prefix::new(0, Name(0))
+    }
+
     /// Create a `Prefix` using the given byte as the highest order byte of the prefix.
     pub fn short(bit_count: usize, name: u8) -> Prefix {
         let long_name = (name as u64) << (64 - 8);

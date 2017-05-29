@@ -89,7 +89,7 @@ impl Node {
     fn update_current_blocks(&mut self, new_votes: &[(Vote, BTreeSet<Name>)]) {
         // Any of the existing current blocks or the new valid blocks could be
         // in the next set of current blocks.
-        let mut potentially_current = vec![];
+        let mut potentially_current = btreeset!{};
         potentially_current.extend(mem::replace(&mut self.current_blocks, btreeset!{}));
         potentially_current.extend(new_votes.iter().map(|&(ref vote, _)| vote.to.clone()));
 

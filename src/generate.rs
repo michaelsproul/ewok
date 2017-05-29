@@ -18,7 +18,7 @@ pub fn generate_network(sections: &BTreeMap<Prefix, usize>,
                         params: NodeParams)
                         -> (BTreeMap<Name, Node>, CurrentBlocks) {
     // Check that the supplied prefixes describe a whole network.
-    assert!(Prefix::new(0, Name(0)).is_covered_by(sections.keys()),
+    assert!(Prefix::empty().is_covered_by(sections.keys()),
             "Prefixes should cover the whole namespace");
 
     let mut nodes_by_section = btreemap!{};

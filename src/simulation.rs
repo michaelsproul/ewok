@@ -82,7 +82,7 @@ impl Simulation {
     /// Create a new simulation with a single seed node.
     pub fn new(params: SimulationParams, node_params: NodeParams) -> Self {
         let single_node_genesis = btreemap! {
-            Prefix::new(0, Name(0)) => 1
+            Prefix::empty() => 1
         };
         Self::new_from(single_node_genesis,
                        EventSchedule::empty(),

@@ -41,8 +41,8 @@ impl PeerStates {
     }
 
     /// Names of all known peers.
-    pub fn all_peers(&self) -> Vec<Name> {
-        self.states.keys().cloned().collect()
+    pub fn all_peers<'a>(&'a self) -> Box<Iterator<Item = &'a Name> + 'a> {
+        Box::new(self.states.keys())
     }
 
     /// Called when we see a NodeJoined message.

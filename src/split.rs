@@ -7,17 +7,13 @@ pub fn split_blocks(current_blocks: &CurrentBlocks,
                     min_split_size: usize)
                     -> Vec<Vote> {
     our_blocks(current_blocks, our_name)
-        .filter_map(|block| split_block(block, current_blocks, min_split_size))
-        .flat_map(|(v0, v1)| vec![v0, v1])
+        .flat_map(|block| split_block(block, current_blocks, min_split_size))
         .collect()
 }
 
 /// If a section as described by `block` can split, return the two blocks it splits into.
 /// rule:Split
-fn split_block(block: &Block,
-               current_blocks: &CurrentBlocks,
-               min_split_size: usize)
-               -> Option<(Vote, Vote)> {
+fn split_block(block: &Block, current_blocks: &CurrentBlocks, min_split_size: usize) -> Vec<Vote> {
     let p0 = block.prefix.pushed(false);
     let p1 = block.prefix.pushed(true);
     let (s0, s1): (BTreeSet<_>, _) = block
@@ -47,9 +43,9 @@ fn split_block(block: &Block,
             to: b1,
         };
 
-        Some((v0, v1))
+        vec![v0, v1]
     } else {
-        None
+        vec![]
     }
 }
 

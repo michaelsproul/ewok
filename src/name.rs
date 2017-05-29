@@ -214,6 +214,15 @@ impl Prefix {
              .is_covered_by_impl(prefixes, max_prefix_len))
     }
 
+    /// Returns the given `name` with first bits replaced by `self`
+    pub fn substituted_in(&self, mut name: Name) -> Name {
+        // TODO: is there a more efficient way of doing that?
+        for i in 0..self.bit_count() {
+            name = name.with_bit(i, self.name.bit(i));
+        }
+        name
+    }
+
     /// Returns the prefix that is the sibling of `self` (if one exists)
     pub fn sibling(&self) -> Option<Prefix> {
         if self.bit_count > 0 {

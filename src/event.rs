@@ -50,9 +50,8 @@ fn add_node(joining_node: Name, nodes: &BTreeMap<Name, Node>) -> Vec<Message> {
 fn select_node_to_remove(prefix: Prefix, nodes: &BTreeMap<Name, Node>) -> Option<Name> {
     nodes
         .iter()
-        .filter(move |&(name, _)| prefix.matches(*name))
+        .find(move |&(name, _)| prefix.matches(*name))
         .map(|(name, _)| *name)
-        .next()
 }
 
 fn remove_node(to_remove: Name, nodes: &BTreeMap<Name, Node>) -> Vec<Message> {

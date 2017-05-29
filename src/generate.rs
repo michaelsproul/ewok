@@ -8,9 +8,6 @@ use random::random;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Maximum number of names to generate to try to match a prefix.
-const MAX_GUESSES: usize = 1000;
-
 /// Generate a bunch of nodes based on sizes specified for sections.
 ///
 /// `sections`: map from prefix to desired size for that section.
@@ -25,7 +22,7 @@ pub fn generate_network(sections: &BTreeMap<Prefix, usize>,
 
     for (prefix, &size) in sections {
         let node_names: BTreeSet<_> = (0..size)
-            .map(|_| generate_name_with_prefix(prefix))
+            .map(|_| prefix.substituted_in(random()))
             .collect();
         nodes_by_section.insert(*prefix, node_names);
     }
@@ -53,15 +50,4 @@ fn construct_blocks(nodes: BTreeMap<Prefix, BTreeSet<Name>>) -> CurrentBlocks {
                  }
              })
         .collect()
-}
-
-/// Generate a name that matches a prefix.
-fn generate_name_with_prefix(prefix: &Prefix) -> Name {
-    for _ in 0..MAX_GUESSES {
-        let name = random();
-        if prefix.matches(name) {
-            return name;
-        }
-    }
-    panic!("couldn't generate a name to match: {:?}", prefix);
 }

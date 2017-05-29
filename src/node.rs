@@ -137,9 +137,9 @@ impl Node {
     pub fn neighbouring_nodes(&self) -> BTreeSet<Name> {
         let mut res: BTreeSet<_> = self.current_blocks
             .iter()
-            .flat_map(|block| block.members.clone())
+            .flat_map(|block| block.members.iter().cloned())
             .collect();
-        res.extend(self.peer_states.all_peers());
+        res.extend(self.peer_states.all_peers().cloned());
         res.remove(&self.our_name);
         res
     }

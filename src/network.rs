@@ -104,7 +104,7 @@ impl Network {
     pub fn queue_is_empty(&self) -> bool {
         self.messages
             .values()
-            .flat_map(|messages| messages.values())
-            .all(|messages| messages.is_empty())
+            .flat_map(BTreeMap::values)
+            .all(Vec::is_empty)
     }
 }

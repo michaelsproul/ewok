@@ -3,7 +3,7 @@
 use event::Event;
 use std::collections::BTreeMap;
 
-/// A schedule for the occurence of events like node additions and removals.
+/// A schedule for the occurrence of events like node additions and removals.
 ///
 /// You specify the event, and the step number at which you'd like it to occur.
 pub struct EventSchedule {

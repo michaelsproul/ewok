@@ -84,7 +84,10 @@ impl Simulation {
         let single_node_genesis = btreemap! {
             Prefix::new(0, Name(0)) => 1
         };
-        Self::new_from(single_node_genesis, EventSchedule::empty(), params, node_params)
+        Self::new_from(single_node_genesis,
+                       EventSchedule::empty(),
+                       params,
+                       node_params)
     }
 
     /// Create a new simulation with sections whose prefixes and sizes are specified by `sections`.
@@ -122,7 +125,7 @@ impl Simulation {
         let node = Node::new(joining, genesis_set, params);
 
         // TODO: only add connections to this node's section(s).
-        let whole_network = self.nodes.keys().map(|k| *k).collect();
+        let whole_network = self.nodes.keys().cloned().collect();
         self.add_connections(joining, whole_network);
 
         self.nodes.insert(joining, node);
@@ -147,7 +150,7 @@ impl Simulation {
         match *event {
             Event::AddNode(name) => self.apply_add_node(name),
             Event::RemoveNode(name) => self.apply_remove_node(name),
-            Event::RemoveNodeFrom(_) => panic!("normalise RemoveNodeFrom before applying")
+            Event::RemoveNodeFrom(_) => panic!("normalise RemoveNodeFrom before applying"),
         }
     }
 
@@ -329,8 +332,7 @@ impl Simulation {
                 if !self.message_allowed(&message) {
                     // Requeue if the recipient is still active, and we haven't yet
                     // entered into the "no more messages" phase.
-                    if self.nodes.contains_key(&message.recipient) &&
-                       step < self.params.num_steps {
+                    if self.nodes.contains_key(&message.recipient) && step < self.params.num_steps {
                         to_requeue.push(message);
                     }
                     continue;

@@ -34,7 +34,7 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>, min_section_size: usize) 
     }
 
     for (p1, p2) in sections.keys().tuple_combinations() {
-        if p1.is_compatible(*p2) {
+        if p1.is_compatible(p2) {
             failed = true;
             println!("prefixes {:?} and {:?} overlap", p1, p2);
         }

@@ -4,3 +4,4 @@ target/
 *.sln
 **/.vs
 *.sublime-*
+.DS_Store

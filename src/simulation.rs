@@ -165,7 +165,7 @@ impl Simulation {
                                 content: ConnectionLost,
                             }];
 
-        let _ = self.disconnected.insert(pair);
+        self.disconnected.insert(pair);
         messages
     }
 
@@ -193,7 +193,7 @@ impl Simulation {
                                   content: ConnectionRegained,
                               });
             } else {
-                let _ = self.disconnected.insert(pair);
+                self.disconnected.insert(pair);
             }
         }
         messages

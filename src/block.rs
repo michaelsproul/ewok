@@ -161,7 +161,7 @@ pub fn compute_current_blocks(valid_blocks: BTreeSet<Block>) -> CurrentBlocks {
     // 1. Sort by version.
     let mut blocks_by_version: BTreeMap<u64, BTreeSet<Block>> = btreemap!{};
     for block in valid_blocks {
-        let _ = blocks_by_version
+        blocks_by_version
             .entry(block.version)
             .or_insert_with(BTreeSet::new)
             .insert(block);

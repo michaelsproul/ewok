@@ -1,12 +1,31 @@
-use name::Name;
+use name::{Name, Prefix};
 use block::{Block, Vote, CurrentBlocks, our_blocks, blocks_for_prefix};
 use std::collections::BTreeSet;
 use std::cmp;
 
 pub fn merge_blocks(current_blocks: &CurrentBlocks,
+                    ambiguous_step: Option<u64>,
                     our_name: Name,
-                    min_section_size: usize)
+                    min_section_size: usize,
+                    step: u64)
                     -> Vec<Vote> {
+    let mut result = merge_rule(current_blocks, our_name, min_section_size);
+    result.extend(mergeconv_rule(current_blocks, ambiguous_step, our_name, step));
+    result.into_iter().collect()
+}
+
+fn mergeconv_rule(current_blocks: &CurrentBlocks,
+                  ambiguous_step: Option<u64>,
+                  our_name: Name,
+                  step: u64)
+                  -> BTreeSet<Vote> {
+    btreeset!{}
+}
+
+fn merge_rule(current_blocks: &CurrentBlocks,
+              our_name: Name,
+              min_section_size: usize)
+              -> BTreeSet<Vote> {
     // find blocks that describe sections below threshold
     let candidates = find_small_blocks(current_blocks, min_section_size);
     let mut votes = BTreeSet::new();
@@ -42,7 +61,7 @@ pub fn merge_blocks(current_blocks: &CurrentBlocks,
             }
         }
     }
-    votes.into_iter().collect()
+    votes
 }
 
 fn find_small_blocks<'a>(current_blocks: &'a CurrentBlocks,

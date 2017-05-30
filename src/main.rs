@@ -3,6 +3,7 @@ extern crate ewok;
 use ewok::simulation::Simulation;
 use ewok::params::{SimulationParams, NodeParams};
 use ewok::logging::init_logging;
+use ewok::random::seed;
 
 fn main() {
     init_logging();
@@ -27,5 +28,8 @@ fn main() {
 
     let mut simulation = Simulation::new(params, node_params);
 
-    simulation.run().expect("network consistency");
+    match simulation.run() {
+        Ok(()) => println!("success"),
+        Err(()) => panic!("failed, investigate this seed: {:?}", seed()),
+    }
 }

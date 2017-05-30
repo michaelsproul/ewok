@@ -123,13 +123,13 @@ pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
         let mut new_frontier = BTreeSet::new();
 
         for (vote, voters) in frontier {
-            // Frontier block is valid. If new, add its vote to the set of new valid votes.
-            if !valid_blocks.contains(&vote.to) {
-                new_valid_votes.push((vote.clone(), voters));
-            }
-
             // Branch out to all now valid successors of this block.
             new_frontier.extend(successors(vote_counts, &vote.to));
+
+            // Frontier block is valid. If new, add its vote to the set of new valid votes.
+            if !valid_blocks.contains(&vote.to) {
+                new_valid_votes.push((vote, voters));
+            }
         }
 
         frontier = new_frontier;

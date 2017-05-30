@@ -5,6 +5,7 @@ extern crate maplit;
 use ewok::name::Prefix;
 use ewok::event::Event::*;
 use ewok::event_schedule::EventSchedule;
+use ewok::logging::init_logging;
 use ewok::simulation::Simulation;
 use ewok::params::{SimulationParams, NodeParams};
 
@@ -31,6 +32,8 @@ fn default_node_params() -> NodeParams {
 
 #[test]
 fn four_sections() {
+    init_logging();
+
     let p00 = Prefix::short(2, 0b00000000);
     let p01 = Prefix::short(2, 0b01000000);
     let p10 = Prefix::short(2, 0b10000000);

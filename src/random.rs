@@ -20,7 +20,7 @@ thread_local! {
                  rng.next_u32().wrapping_add(rng.next_u32())]
             }
         };
-        println!("Seed: {:?}", seed);
+        info!("Seed: {:?}", seed);
         XorShiftRng::from_seed(seed)
     });
 }

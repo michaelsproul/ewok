@@ -100,7 +100,7 @@ impl PeerStates {
         let state = match self.states.get_mut(&name) {
             Some(s) => s,
             None => {
-                println!("warning: out-of-order disconnect, we don't have a state for that node");
+                info!("warning: out-of-order disconnect, we don't have a state for that node");
                 return;
             }
         };
@@ -108,7 +108,7 @@ impl PeerStates {
         match *state {
             // Already disconnected, do nothing.
             Disconnected { .. } => {
-                println!("warning: out-of-order disconnect, already disconnected");
+                info!("warning: out-of-order disconnect, already disconnected");
             }
             // Anything else, update state to disconnected.
             _ => {
@@ -125,7 +125,7 @@ impl PeerStates {
         let state_ptr = match self.states.get_mut(&name) {
             Some(s) => s,
             None => {
-                println!("warning: reconnect before connect");
+                info!("warning: reconnect before connect");
                 return;
             }
         };
@@ -136,7 +136,7 @@ impl PeerStates {
         if let Disconnected { previous_state, .. } = state {
             *state_ptr = *previous_state;
         } else {
-            println!("warning: out-of-order reconnect");
+            info!("warning: out-of-order reconnect");
             *state_ptr = state;
         }
     }

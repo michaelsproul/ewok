@@ -95,7 +95,6 @@ impl Node {
 
         mem::replace(&mut self.current_blocks,
                      compute_current_blocks(potentially_current));
-        //println!("{}: we have {} current blocks", self, self.current_blocks.len());
     }
 
     /// Update peer states for changes to the set of current blocks.
@@ -185,7 +184,7 @@ impl Node {
         for node in self.peer_states.nodes_to_add(step) {
             for block in self.our_current_blocks() {
                 if Self::could_be_added(node, block) {
-                    println!("{}: voting to add {} to: {:?}", self, node, block);
+                    info!("{}: voting to add {} to: {:?}", self, node, block);
                     votes.push(Vote {
                                    from: block.clone(),
                                    to: block.add_node(node),
@@ -197,7 +196,7 @@ impl Node {
         for node in self.peer_states.nodes_to_drop(step) {
             for block in self.our_current_blocks() {
                 if block.members.contains(&node) {
-                    println!("{}: voting to remove {} from: {:?}", self, node, block);
+                    info!("{}: voting to remove {} from: {:?}", self, node, block);
                     votes.push(Vote {
                                    from: block.clone(),
                                    to: block.remove_node(node),
@@ -207,7 +206,7 @@ impl Node {
         }
 
         for vote in split_blocks(&self.current_blocks, self.our_name, self.min_split_size()) {
-            println!("{}: voting to split from: {:?} to: {:?}",
+            info!("{}: voting to split from: {:?} to: {:?}",
                      self,
                      vote.from,
                      vote.to);
@@ -217,7 +216,7 @@ impl Node {
         for vote in merge_blocks(&self.current_blocks,
                                  self.our_name,
                                  self.params.min_section_size as usize) {
-            println!("{}: voting to merge from: {:?} to: {:?}",
+            info!("{}: voting to merge from: {:?} to: {:?}",
                      self,
                      vote.from,
                      vote.to);
@@ -284,7 +283,7 @@ impl Node {
         let mut to_send = match message.content {
             NodeJoined => {
                 let joining_node = message.sender;
-                println!("{}: received join message for: {}", self, joining_node);
+                info!("{}: received join message for: {}", self, joining_node);
 
                 // Mark the peer as having joined so that we vote to keep adding it.
                 self.peer_states.node_joined(joining_node, step);
@@ -295,13 +294,13 @@ impl Node {
                 messages
             }
             VoteMsg(vote) => {
-                println!("{}: received {:?} from {}", self, vote, message.sender);
+                info!("{}: received {:?} from {}", self, vote, message.sender);
                 let mut msgs = self.add_vote(vote, Some(message.sender));
                 msgs.extend(self.broadcast_new_votes(step));
                 msgs
             }
             VoteAgreedMsg((vote, voters)) => {
-                println!("{}: received agreement for {:?} from {}",
+                info!("{}: received agreement for {:?} from {}",
                          self,
                          vote,
                          message.sender);
@@ -310,18 +309,18 @@ impl Node {
                 msgs
             }
             BootstrapMsg(vote_counts) => {
-                println!("{}: applying bootstrap message from {}",
+                info!("{}: applying bootstrap message from {}",
                          self,
                          message.sender);
                 self.apply_bootstrap_msg(vote_counts)
             }
             ConnectionLost => {
-                println!("{}: lost our connection to {}", self, message.sender);
+                info!("{}: lost our connection to {}", self, message.sender);
                 self.peer_states.disconnected(message.sender, step);
                 self.broadcast_new_votes(step)
             }
             ConnectionRegained => {
-                println!("{}: regained our connection to {}", self, message.sender);
+                info!("{}: regained our connection to {}", self, message.sender);
                 self.peer_states.reconnected(message.sender, step);
                 self.broadcast_new_votes(step)
             }

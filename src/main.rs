@@ -2,8 +2,11 @@ extern crate ewok;
 
 use ewok::simulation::Simulation;
 use ewok::params::{SimulationParams, NodeParams};
+use ewok::logging::init_logging;
 
 fn main() {
+    init_logging();
+
     let params = SimulationParams {
         max_num_nodes: 30,
         num_steps: 1150,

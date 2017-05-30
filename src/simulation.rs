@@ -115,7 +115,7 @@ impl Simulation {
     }
 
     fn apply_remove_node(&mut self, leaving_node: Name) {
-        println!("Node({}): dying...", leaving_node);
+        info!("Node({}): dying...", leaving_node);
 
         // Remove the node.
         self.nodes.remove(&leaving_node);
@@ -151,7 +151,7 @@ impl Simulation {
             }
         }
 
-        println!("Node({}) and Node({}) disconnecting from each other...",
+        info!("Node({}) and Node({}) disconnecting from each other...",
                  pair.lower(),
                  pair.higher());
         let messages = vec![Message {
@@ -179,7 +179,7 @@ impl Simulation {
             if self.nodes[&pair.lower()].is_disconnected_from(&pair.higher()) &&
                self.nodes[&pair.higher()].is_disconnected_from(&pair.lower()) &&
                do_with_probability(self.params.prob_reconnect) {
-                println!("Node({}) and Node({}) reconnecting to each other...",
+                info!("Node({}) and Node({}) reconnecting to each other...",
                          pair.lower(),
                          pair.higher());
                 messages.push(Message {
@@ -238,7 +238,7 @@ impl Simulation {
         let mut ran_to_completion = false;
 
         for step in 0..(self.params.num_steps + max_extra_steps) {
-            println!("-- step {} --", step);
+            info!("-- step {} --", step);
 
             // Generate events.
             // We only generate events for at most `num_steps` steps, after which point
@@ -264,7 +264,7 @@ impl Simulation {
                         self.network.send(step, new_messages);
                     }
                     None => {
-                        println!("dropping message for dead node {}", message.recipient);
+                        info!("dropping message for dead node {}", message.recipient);
                     }
                 }
             }
@@ -275,9 +275,9 @@ impl Simulation {
             }
         }
 
-        println!("-- final node states --");
+        info!("-- final node states --");
         for node in self.nodes.values() {
-            println!("{}: current_blocks: {:#?}", node, node.current_blocks);
+            info!("{}: current_blocks: {:#?}", node, node.current_blocks);
         }
 
         assert!(ran_to_completion,

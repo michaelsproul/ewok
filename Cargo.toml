@@ -7,7 +7,12 @@ authors = ["Michael Sproul <micsproul@gmail.com>"]
 rand = "0.3"
 itertools = "0.6"
 maplit = "0.1"
+log = "0.3"
+env_logger = "0.4"
 
 [[bin]]
 name = "ewok"
 doc = false
+
+[profile.release]
+debug = true

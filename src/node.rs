@@ -226,7 +226,8 @@ impl Node {
         votes
     }
 
-    fn broadcast_new_votes(&mut self, step: u64) -> Vec<Message> {
+    /// Returns new votes to be broadcast after filtering them.
+    pub fn broadcast_new_votes(&mut self, step: u64) -> Vec<Message> {
         let votes = self.construct_new_votes(step);
         let our_name = self.our_name;
 
@@ -243,15 +244,14 @@ impl Node {
 
         self.update_peer_states(step);
 
-        to_broadcast
+        self.filter_messages(to_broadcast)
     }
 
-    /// Returns new votes to be broadcast after filtering them
-    pub fn filtered_broadcast_new_votes(&mut self, step: u64) -> Vec<Message> {
-        let mut to_send = self.broadcast_new_votes(step);
-        to_send.retain(|msg| !self.message_filter.contains(msg));
-        self.message_filter.extend(to_send.clone());
-        to_send
+    /// Remove messages that have already been sent from `messages`, and update the filter.
+    fn filter_messages(&mut self, mut messages: Vec<Message>) -> Vec<Message> {
+        messages.retain(|msg| !self.message_filter.contains(msg));
+        self.message_filter.extend(messages.clone());
+        messages
     }
 
     /// Create a message with all our votes to send to a new node.
@@ -280,7 +280,7 @@ impl Node {
 
     /// Handle a message intended for us and return messages we'd like to send.
     pub fn handle_message(&mut self, message: Message, step: u64) -> Vec<Message> {
-        let mut to_send = match message.content {
+        let to_send = match message.content {
             NodeJoined => {
                 let joining_node = message.sender;
                 info!("{}: received join message for: {}", self, joining_node);
@@ -288,25 +288,19 @@ impl Node {
                 // Mark the peer as having joined so that we vote to keep adding it.
                 self.peer_states.node_joined(joining_node, step);
 
-                // Broadcast new votes.
-                let mut messages = self.broadcast_new_votes(step);
-                messages.push(self.construct_bootstrap_msg(joining_node));
-                messages
+                // Send a bootstrap message to the joining node.
+                vec![self.construct_bootstrap_msg(joining_node)]
             }
             VoteMsg(vote) => {
                 info!("{}: received {:?} from {}", self, vote, message.sender);
-                let mut msgs = self.add_vote(vote, Some(message.sender));
-                msgs.extend(self.broadcast_new_votes(step));
-                msgs
+                self.add_vote(vote, Some(message.sender))
             }
             VoteAgreedMsg((vote, voters)) => {
                 info!("{}: received agreement for {:?} from {}",
                          self,
                          vote,
                          message.sender);
-                let mut msgs = self.add_vote(vote, voters);
-                msgs.extend(self.broadcast_new_votes(step));
-                msgs
+                self.add_vote(vote, voters)
             }
             BootstrapMsg(vote_counts) => {
                 info!("{}: applying bootstrap message from {}",
@@ -317,17 +311,15 @@ impl Node {
             ConnectionLost => {
                 info!("{}: lost our connection to {}", self, message.sender);
                 self.peer_states.disconnected(message.sender, step);
-                self.broadcast_new_votes(step)
+                vec![]
             }
             ConnectionRegained => {
                 info!("{}: regained our connection to {}", self, message.sender);
                 self.peer_states.reconnected(message.sender, step);
-                self.broadcast_new_votes(step)
+                vec![]
             }
         };
 
-        to_send.retain(|msg| !self.message_filter.contains(msg));
-        self.message_filter.extend(to_send.clone());
-        to_send
+        self.filter_messages(to_send)
     }
 }

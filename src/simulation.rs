@@ -106,11 +106,11 @@ impl Simulation {
         }
     }
 
-    fn apply_add_node(&mut self, joining: Name) {
+    fn apply_add_node(&mut self, joining: Name, step: u64) {
         // Make the node active, and let it build its way up from the genesis block(s).
         let genesis_set = self.genesis_set.clone();
         let params = self.node_params.clone();
-        let node = Node::new(joining, genesis_set, params);
+        let node = Node::new(joining, genesis_set, params, step);
         self.nodes.insert(joining, node);
     }
 
@@ -128,9 +128,9 @@ impl Simulation {
             .collect();
     }
 
-    fn apply_event(&mut self, event: &Event) {
+    fn apply_event(&mut self, event: &Event, step: u64) {
         match *event {
-            Event::AddNode(name) => self.apply_add_node(name),
+            Event::AddNode(name) => self.apply_add_node(name, step),
             Event::RemoveNode(name) => self.apply_remove_node(name),
             Event::RemoveNodeFrom(_) => panic!("normalise RemoveNodeFrom before applying"),
         }
@@ -207,10 +207,11 @@ impl Simulation {
 
         let mut ev_messages = vec![];
 
-        for ev in &mut events {
-            ev.normalise(&self.nodes);
-            ev_messages.extend(ev.broadcast(&self.nodes));
-            self.apply_event(ev);
+        for ev in events {
+            if let Some(ev) = ev.normalise(&self.nodes) {
+                ev_messages.extend(ev.broadcast(&self.nodes));
+                self.apply_event(&ev, step);
+            }
         }
 
         self.network.send(step, ev_messages);
@@ -268,6 +269,21 @@ impl Simulation {
                     }
                 }
             }
+
+            // Shutdown nodes that have failed to join.
+            let mut to_shutdown = BTreeSet::new();
+            for (name, node) in &self.nodes {
+                if node.should_shutdown(step) {
+                    to_shutdown.insert(*name);
+                }
+            }
+
+            for name in to_shutdown {
+                self.apply_remove_node(name);
+                let removal_msgs = Event::RemoveNode(name).broadcast(&self.nodes);
+                self.network.send(step, removal_msgs);
+            }
+
             // Send pending votes independently of churn events
             for node in self.nodes.values_mut() {
                 self.network.send(step, node.broadcast_new_votes(step));

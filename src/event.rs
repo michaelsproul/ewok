@@ -3,7 +3,6 @@ use node::Node;
 use message::Message;
 use message::MessageContent::*;
 use std::collections::BTreeMap;
-
 use self::Event::*;
 
 #[derive(Clone)]
@@ -25,10 +24,12 @@ impl Event {
         }
     }
 
-    pub fn normalise(&mut self, nodes: &BTreeMap<Name, Node>) {
-        if let RemoveNodeFrom(prefix) = *self {
-            let to_remove = select_node_to_remove(prefix, nodes).unwrap();
-            *self = RemoveNode(to_remove)
+    /// If this is an event about a prefix, transform it into an event about a specific node.
+    pub fn normalise(self, nodes: &BTreeMap<Name, Node>) -> Option<Self> {
+        if let RemoveNodeFrom(prefix) = self {
+            select_node_to_remove(prefix, nodes).map(RemoveNode)
+        } else {
+            Some(self)
         }
     }
 }

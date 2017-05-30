@@ -28,6 +28,8 @@ pub struct Node {
     pub message_filter: BTreeSet<Message>,
     /// Network configuration parameters.
     pub params: NodeParams,
+    /// Step that this node was created.
+    pub step_created: u64,
 }
 
 impl fmt::Display for Node {
@@ -38,7 +40,7 @@ impl fmt::Display for Node {
 
 impl Node {
     /// Create a new node which starts from a given set of valid and current blocks.
-    pub fn new(name: Name, current_blocks: CurrentBlocks, params: NodeParams) -> Self {
+    pub fn new(name: Name, current_blocks: CurrentBlocks, params: NodeParams, step: u64) -> Self {
         let mut node = Node {
             our_name: name,
             valid_blocks: current_blocks.clone(),
@@ -47,6 +49,7 @@ impl Node {
             peer_states: PeerStates::new(params.clone()),
             message_filter: BTreeSet::new(),
             params,
+            step_created: step,
         };
 
         // Update the peer states immediately so that genesis nodes are considered confirmed.
@@ -284,6 +287,12 @@ impl Node {
     /// Returns true if the peer is known and its state is `Disconnected`.
     pub fn is_disconnected_from(&self, name: &Name) -> bool {
         self.peer_states.is_disconnected_from(name)
+    }
+
+    /// Returns true if this node should shutdown because it has failed to join a section.
+    pub fn should_shutdown(&self, step: u64) -> bool {
+        step >= self.step_created + self.params.self_shutdown_timeout &&
+        self.our_current_blocks().count() == 0
     }
 
     /// Handle a message intended for us and return messages we'd like to send.

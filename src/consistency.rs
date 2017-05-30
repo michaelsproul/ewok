@@ -22,8 +22,8 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>, min_section_size: usize) 
         if versions.len() > 1 {
             failed = true;
             info!("multiple versions of {:?}, they are: {:#?}",
-                     prefix,
-                     versions);
+                  prefix,
+                  versions);
         } else {
             let members = &versions.iter().next().unwrap().members;
             if members.len() < min_section_size {

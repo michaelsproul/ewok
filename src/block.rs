@@ -149,17 +149,16 @@ fn successors<'a>(vote_counts: &'a VoteCounts,
         .into_iter()
         .flat_map(|inner_map| inner_map.iter())
         .filter(move |&(succ, _)| {
-                    succ.prefix.is_neighbour(&from.prefix) ||
-                    succ.is_admissible_after(from)
+                    succ.prefix.is_neighbour(&from.prefix) || succ.is_admissible_after(from)
                 })
         .filter(move |&(_, voters)| is_quorum_of(voters, &from.members))
         .map(move |(succ, voters)| {
-            let vote = Vote {
-                from: from.clone(),
-                to: succ.clone(),
-            };
-            (vote, voters.clone())
-        });
+                 let vote = Vote {
+                     from: from.clone(),
+                     to: succ.clone(),
+                 };
+                 (vote, voters.clone())
+             });
 
     Box::new(iter)
 }

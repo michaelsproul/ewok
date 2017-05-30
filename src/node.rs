@@ -209,9 +209,9 @@ impl Node {
 
         for vote in split_blocks(&self.current_blocks, self.our_name, self.min_split_size()) {
             info!("{}: voting to split from: {:?} to: {:?}",
-                     self,
-                     vote.from,
-                     vote.to);
+                  self,
+                  vote.from,
+                  vote.to);
             votes.push(vote);
         }
 
@@ -219,9 +219,9 @@ impl Node {
                                  self.our_name,
                                  self.params.min_section_size as usize) {
             info!("{}: voting to merge from: {:?} to: {:?}",
-                     self,
-                     vote.from,
-                     vote.to);
+                  self,
+                  vote.from,
+                  vote.to);
             votes.push(vote);
         }
 
@@ -270,7 +270,10 @@ impl Node {
         let mut to_send = vec![];
         for (from, map) in vote_counts {
             for (to, voters) in map {
-                let vote = Vote { from: from.clone(), to };
+                let vote = Vote {
+                    from: from.clone(),
+                    to,
+                };
                 let our_votes = self.add_vote(vote, voters);
                 to_send.extend(our_votes);
             }
@@ -302,15 +305,15 @@ impl Node {
             }
             VoteAgreedMsg((vote, voters)) => {
                 info!("{}: received agreement for {:?} from {}",
-                         self,
-                         vote,
-                         message.sender);
+                      self,
+                      vote,
+                      message.sender);
                 self.add_vote(vote, voters)
             }
             BootstrapMsg(vote_counts) => {
                 info!("{}: applying bootstrap message from {}",
-                         self,
-                         message.sender);
+                      self,
+                      message.sender);
                 self.apply_bootstrap_msg(vote_counts)
             }
             ConnectionLost => {

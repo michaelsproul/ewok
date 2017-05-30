@@ -152,8 +152,8 @@ impl Simulation {
         }
 
         info!("Node({}) and Node({}) disconnecting from each other...",
-                 pair.lower(),
-                 pair.higher());
+              pair.lower(),
+              pair.higher());
         let messages = vec![Message {
                                 sender: pair.lower(),
                                 recipient: pair.higher(),
@@ -180,8 +180,8 @@ impl Simulation {
                self.nodes[&pair.higher()].is_disconnected_from(&pair.lower()) &&
                do_with_probability(self.params.prob_reconnect) {
                 info!("Node({}) and Node({}) reconnecting to each other...",
-                         pair.lower(),
-                         pair.higher());
+                      pair.lower(),
+                      pair.higher());
                 messages.push(Message {
                                   sender: pair.lower(),
                                   recipient: pair.higher(),
@@ -270,8 +270,7 @@ impl Simulation {
             }
             // Send pending votes independently of churn events
             for node in self.nodes.values_mut() {
-                self.network
-                    .send(step, node.broadcast_new_votes(step));
+                self.network.send(step, node.broadcast_new_votes(step));
             }
         }
 

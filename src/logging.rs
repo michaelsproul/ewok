@@ -14,7 +14,7 @@ pub fn init_logging() {
             .target(LogTarget::Stdout)
             .parse(&rust_log);
 
-        if let Err(_) = builder.init() {
+        if builder.init().is_err() {
             // already initialised
         }
     }

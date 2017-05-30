@@ -17,7 +17,9 @@ pub struct Vote {
 
 pub type ValidBlocks = BTreeSet<Block>;
 pub type CurrentBlocks = BTreeSet<Block>;
-pub type VoteCounts = BTreeMap<Vote, BTreeSet<Name>>;
+
+/// Mapping from votes to voters: (vote.from -> (vote.to -> names)).
+pub type VoteCounts = BTreeMap<Block, BTreeMap<Block, BTreeSet<Name>>>;
 
 impl Block {
     /// Create a genesis block.
@@ -142,16 +144,22 @@ pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
 fn successors<'a>(vote_counts: &'a VoteCounts,
                   from: &'a Block)
                   -> Box<Iterator<Item = (Vote, BTreeSet<Name>)> + 'a> {
-    // TODO: could be more efficient with look-up by `from` block.
     let iter = vote_counts
-        .iter()
-        .filter(move |&(vote, _)| &vote.from == from)
-        .filter(move |&(vote, _)| {
-                    vote.to.prefix.is_neighbour(&from.prefix) ||
-                    vote.to.is_admissible_after(&vote.from)
+        .get(from)
+        .into_iter()
+        .flat_map(|inner_map| inner_map.iter())
+        .filter(move |&(succ, _)| {
+                    succ.prefix.is_neighbour(&from.prefix) ||
+                    succ.is_admissible_after(from)
                 })
-        .filter(|&(vote, voters)| is_quorum_of(voters, &vote.from.members))
-        .map(|(vote, voters)| (vote.clone(), voters.clone()));
+        .filter(move |&(_, voters)| is_quorum_of(voters, &from.members))
+        .map(move |(succ, voters)| {
+            let vote = Vote {
+                from: from.clone(),
+                to: succ.clone(),
+            };
+            (vote, voters.clone())
+        });
 
     Box::new(iter)
 }

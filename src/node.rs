@@ -65,7 +65,9 @@ impl Node {
         where I: IntoIterator<Item = Name>
     {
         let voters = self.vote_counts
-            .entry(vote)
+            .entry(vote.from)
+            .or_insert_with(BTreeMap::new)
+            .entry(vote.to)
             .or_insert_with(BTreeSet::new);
         voters.extend(voted_for);
     }
@@ -266,9 +268,12 @@ impl Node {
     /// Apply a bootstrap message received from another node.
     fn apply_bootstrap_msg(&mut self, vote_counts: VoteCounts) -> Vec<Message> {
         let mut to_send = vec![];
-        for (vote, voters) in vote_counts {
-            let our_votes = self.add_vote(vote, voters);
-            to_send.extend(our_votes);
+        for (from, map) in vote_counts {
+            for (to, voters) in map {
+                let vote = Vote { from: from.clone(), to };
+                let our_votes = self.add_vote(vote, voters);
+                to_send.extend(our_votes);
+            }
         }
         to_send
     }

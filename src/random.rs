@@ -4,13 +4,12 @@ use std::env;
 
 thread_local! {
     static WEAK_RNG: RefCell<XorShiftRng> = RefCell::new({
-        #[cfg_attr(feature="cargo-clippy", allow(should_assert_eq))]
         let seed = match env::var("EWOK_SEED") {
             Ok(value) => {
                 let nums: Vec<u32> = value.split(|c| c == '[' || c == ']' || c == ' ' || c == ',')
                                           .filter_map(|s| s.parse().ok())
                                           .collect();
-                assert!(nums.len() == 4, "EWOK_SEED {} isn't in the form '[1, 2, 3, 4]'.", value);
+                assert_eq!(nums.len(), 4, "EWOK_SEED {} isn't in the form '[1, 2, 3, 4]'.", value);
                 [nums[0], nums[1], nums[2], nums[3]]
             }
             Err(_) => {

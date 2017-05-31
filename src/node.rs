@@ -3,7 +3,7 @@ use message::MessageContent;
 use message::MessageContent::*;
 use name::Name;
 use block::{Block, Vote, ValidBlocks, CurrentBlocks, VoteCounts, new_valid_blocks,
-            compute_current_blocks, our_blocks, section_blocks};
+            compute_current_blocks, our_blocks, is_ambiguous, section_blocks};
 use peer_state::{PeerStates, nodes_in_all, nodes_in_any};
 use params::NodeParams;
 use split::split_blocks;
@@ -20,6 +20,8 @@ pub struct Node {
     pub valid_blocks: ValidBlocks,
     /// Our current blocks.
     pub current_blocks: CurrentBlocks,
+    /// Step number of when our prefix became ambiguous
+    pub ambiguous_step: Option<u64>,
     /// Map from blocks to voters for that block.
     pub vote_counts: VoteCounts,
     /// States for peers.
@@ -41,10 +43,16 @@ impl fmt::Display for Node {
 impl Node {
     /// Create a new node which starts from a given set of valid and current blocks.
     pub fn new(name: Name, current_blocks: CurrentBlocks, params: NodeParams, step: u64) -> Self {
+        let ambiguous_step = if is_ambiguous(&current_blocks, name) {
+            Some(step)
+        } else {
+            None
+        };
         let mut node = Node {
             our_name: name,
             valid_blocks: current_blocks.clone(),
             current_blocks,
+            ambiguous_step,
             vote_counts: BTreeMap::new(),
             peer_states: PeerStates::new(params.clone()),
             message_filter: BTreeSet::new(),
@@ -76,7 +84,7 @@ impl Node {
     }
 
     /// Update valid and current block sets, return set of newly valid blocks to broadcast.
-    fn update_valid_blocks(&mut self, vote: &Vote) -> Vec<(Vote, BTreeSet<Name>)> {
+    fn update_valid_blocks(&mut self, vote: &Vote, step: u64) -> Vec<(Vote, BTreeSet<Name>)> {
         // Update valid blocks.
         let new_valid_votes = new_valid_blocks(&self.valid_blocks, &self.vote_counts, vote);
         self.valid_blocks
@@ -85,13 +93,13 @@ impl Node {
                         .map(|&(ref vote, _)| vote.to.clone()));
 
         // Update current blocks.
-        self.update_current_blocks(&new_valid_votes);
+        self.update_current_blocks(&new_valid_votes, step);
 
         new_valid_votes
     }
 
     /// Update the set of current blocks.
-    fn update_current_blocks(&mut self, new_votes: &[(Vote, BTreeSet<Name>)]) {
+    fn update_current_blocks(&mut self, new_votes: &[(Vote, BTreeSet<Name>)], step: u64) {
         // Any of the existing current blocks or the new valid blocks could be
         // in the next set of current blocks.
         let mut potentially_current = btreeset!{};
@@ -100,6 +108,11 @@ impl Node {
 
         mem::replace(&mut self.current_blocks,
                      compute_current_blocks(potentially_current));
+        if is_ambiguous(&self.current_blocks, self.our_name) {
+            self.ambiguous_step = self.ambiguous_step.or(Some(step));
+        } else {
+            self.ambiguous_step = None;
+        }
     }
 
     /// Update peer states for changes to the set of current blocks.
@@ -123,14 +136,14 @@ impl Node {
     }
 
     /// Add a block to our local cache, and update our current and valid blocks.
-    pub fn add_vote<I>(&mut self, vote: Vote, voted_for: I) -> Vec<Message>
+    pub fn add_vote<I>(&mut self, vote: Vote, voted_for: I, step: u64) -> Vec<Message>
         where I: IntoIterator<Item = Name>
     {
         // Add vote to cache.
         self.add_vote_to_cache(vote.clone(), voted_for);
 
         // Update valid and current blocks.
-        let new_valid_votes = self.update_valid_blocks(&vote);
+        let new_valid_votes = self.update_valid_blocks(&vote, step);
 
         let vote_agreed_msgs = new_valid_votes.into_iter().map(VoteAgreedMsg).collect();
         self.broadcast(vote_agreed_msgs)
@@ -221,8 +234,11 @@ impl Node {
         }
 
         for vote in merge_blocks(&self.current_blocks,
+                                 self.ambiguous_step,
                                  self.our_name,
-                                 self.params.min_section_size) {
+                                 self.params.min_section_size,
+                                 self.params.mergeconv_timeout,
+                                 step) {
             info!("{}: voting to merge from: {:?} to: {:?}",
                   self,
                   vote.from,
@@ -241,7 +257,7 @@ impl Node {
         let mut to_broadcast = vec![];
 
         for vote in &votes {
-            let agreed_msgs = self.add_vote(vote.clone(), Some(our_name));
+            let agreed_msgs = self.add_vote(vote.clone(), Some(our_name), step);
             to_broadcast.extend(agreed_msgs);
         }
 
@@ -271,7 +287,7 @@ impl Node {
     }
 
     /// Apply a bootstrap message received from another node.
-    fn apply_bootstrap_msg(&mut self, vote_counts: VoteCounts) -> Vec<Message> {
+    fn apply_bootstrap_msg(&mut self, vote_counts: VoteCounts, step: u64) -> Vec<Message> {
         let mut to_send = vec![];
         for (from, map) in vote_counts {
             for (to, voters) in map {
@@ -279,7 +295,7 @@ impl Node {
                     from: from.clone(),
                     to,
                 };
-                let our_votes = self.add_vote(vote, voters);
+                let our_votes = self.add_vote(vote, voters, step);
                 to_send.extend(our_votes);
             }
         }
@@ -312,20 +328,20 @@ impl Node {
             }
             VoteMsg(vote) => {
                 info!("{}: received {:?} from {}", self, vote, message.sender);
-                self.add_vote(vote, Some(message.sender))
+                self.add_vote(vote, Some(message.sender), step)
             }
             VoteAgreedMsg((vote, voters)) => {
                 info!("{}: received agreement for {:?} from {}",
                       self,
                       vote,
                       message.sender);
-                self.add_vote(vote, voters)
+                self.add_vote(vote, voters, step)
             }
             BootstrapMsg(vote_counts) => {
                 info!("{}: applying bootstrap message from {}",
                       self,
                       message.sender);
-                self.apply_bootstrap_msg(vote_counts)
+                self.apply_bootstrap_msg(vote_counts, step)
             }
             ConnectionLost => {
                 info!("{}: lost our connection to {}", self, message.sender);

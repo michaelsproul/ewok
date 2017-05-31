@@ -206,6 +206,16 @@ pub fn our_blocks<'a>(blocks: &'a BTreeSet<Block>,
     Box::new(ours)
 }
 
+/// Set of current prefixes we belong to
+pub fn our_prefixes(blocks: &BTreeSet<Block>, our_name: Name) -> BTreeSet<Prefix> {
+    our_blocks(blocks, our_name).map(|b| b.prefix).collect()
+}
+
+/// Check whether we have more than one current prefix
+pub fn is_ambiguous(blocks: &BTreeSet<Block>, our_name: Name) -> bool {
+    our_prefixes(blocks, our_name).len() > 1
+}
+
 /// Blocks that match our name, but that we are not necessarily a part of.
 pub fn section_blocks<'a>(blocks: &'a BTreeSet<Block>,
                           our_name: Name)

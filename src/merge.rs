@@ -1,12 +1,63 @@
 use name::Name;
-use block::{Block, Vote, CurrentBlocks, our_blocks, blocks_for_prefix};
+use block::{Block, Vote, CurrentBlocks, our_blocks, our_prefixes, blocks_for_prefix};
 use std::collections::BTreeSet;
 use std::cmp;
 
 pub fn merge_blocks(current_blocks: &CurrentBlocks,
+                    ambiguous_step: Option<u64>,
                     our_name: Name,
-                    min_section_size: usize)
+                    min_section_size: usize,
+                    mergeconv_timeout: u64,
+                    step: u64)
                     -> Vec<Vote> {
+    let mut result = merge_rule(current_blocks, our_name, min_section_size);
+    result.extend(mergeconv_rule(current_blocks,
+                                 ambiguous_step,
+                                 our_name,
+                                 mergeconv_timeout,
+                                 step));
+    result.into_iter().collect()
+}
+
+fn mergeconv_rule(current_blocks: &CurrentBlocks,
+                  ambiguous_step: Option<u64>,
+                  our_name: Name,
+                  mergeconv_timeout: u64,
+                  step: u64)
+                  -> BTreeSet<Vote> {
+    match ambiguous_step {
+        Some(amb_step) if step - amb_step > mergeconv_timeout => {
+            let mut prefixes = our_prefixes(current_blocks, our_name);
+            let shortest = prefixes
+                .iter()
+                .min_by_key(|pfx| pfx.bit_count())
+                .unwrap()   // safe, because there will be at least one
+                .clone();
+            // drop the shortest prefix and merge all blocks with longer prefixes
+            prefixes.remove(&shortest);
+            let mut votes = btreeset!{};
+            for block in
+                our_blocks(current_blocks, our_name).filter(|b| prefixes.contains(&b.prefix)) {
+                let sibling_prefix = block.prefix.sibling().unwrap(); // safe, because it had an ancestor in our_prefixes
+                for sibling in blocks_for_prefix(current_blocks, sibling_prefix) {
+                    let target = merged_block(sibling, block);
+                    let vote = Vote {
+                        from: block.clone(),
+                        to: target,
+                    };
+                    votes.insert(vote);
+                }
+            }
+            votes
+        }
+        _ => btreeset!{},
+    }
+}
+
+fn merge_rule(current_blocks: &CurrentBlocks,
+              our_name: Name,
+              min_section_size: usize)
+              -> BTreeSet<Vote> {
     // find blocks that describe sections below threshold
     let candidates = find_small_blocks(current_blocks, min_section_size);
     let mut votes = BTreeSet::new();
@@ -42,7 +93,7 @@ pub fn merge_blocks(current_blocks: &CurrentBlocks,
             }
         }
     }
-    votes.into_iter().collect()
+    votes
 }
 
 fn find_small_blocks<'a>(current_blocks: &'a CurrentBlocks,

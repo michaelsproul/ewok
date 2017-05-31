@@ -30,6 +30,8 @@ fn default_node_params() -> NodeParams {
         min_section_size: 0,
         split_buffer: 1,
         join_timeout: 10,
+        rmconv_timeout: 10,
+        mergeconv_timeout: 10,
         self_shutdown_timeout: 30,
     }
 }

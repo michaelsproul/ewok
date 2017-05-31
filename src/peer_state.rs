@@ -162,7 +162,7 @@ impl PeerStates {
                     Disconnected { .. } => true,
                     // rule:RmConv
                     PartiallyLost { since } => {
-                        since < step.saturating_sub(self.params.join_timeout)
+                        since < step.saturating_sub(self.params.rmconv_timeout)
                     }
                     _ => false,
                 }

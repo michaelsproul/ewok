@@ -237,6 +237,7 @@ impl Node {
                                  self.ambiguous_step,
                                  self.our_name,
                                  self.params.min_section_size,
+                                 self.params.mergeconv_timeout,
                                  step) {
             info!("{}: voting to merge from: {:?} to: {:?}",
                   self,

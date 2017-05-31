@@ -23,6 +23,8 @@ fn main() {
         min_section_size: 4,
         split_buffer: 0,
         join_timeout: 20,
+        rmconv_timeout: 20,
+        mergeconv_timeout: 20,
         self_shutdown_timeout: 100,
     };
 

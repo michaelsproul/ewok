@@ -41,10 +41,17 @@ impl Network {
     pub fn receive(&mut self, step: u64) -> Vec<Message> {
         let start_step = step.saturating_sub(self.max_delay);
         let prob_deliver = self.prob_deliver;
+        let max_delay = self.max_delay;
 
         self.messages
             .values_mut()
-            .flat_map(|messages| Self::receive_from_conn(messages, prob_deliver, start_step, step))
+            .flat_map(|messages| {
+                          Self::receive_from_conn(messages,
+                                                  prob_deliver,
+                                                  max_delay,
+                                                  start_step,
+                                                  step)
+                      })
             .collect()
     }
 
@@ -53,6 +60,7 @@ impl Network {
     /// `conn_messages`: the messages for a single connection as contained in `self.messages`.
     fn receive_from_conn(conn_messages: &mut BTreeMap<u64, Vec<Message>>,
                          prob_deliver: f64,
+                         max_delay: u64,
                          start_step: u64,
                          end_step: u64)
                          -> Vec<Message> {
@@ -72,7 +80,8 @@ impl Network {
                 .drain(..)
                 .partition(|_| {
                                let deliver_random = do_with_probability(prob_deliver);
-                               let force_deliver = *step_sent == start_step;
+                               let force_deliver = *step_sent == start_step &&
+                                                   end_step >= max_delay;
                                force_deliver || deliver_random
                            });
 

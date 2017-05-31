@@ -22,9 +22,9 @@ pub struct SimulationParams {
 #[derive(Clone, Debug)]
 pub struct NodeParams {
     /// Minimum section size.
-    pub min_section_size: u64,
+    pub min_section_size: usize,
     /// Number of nodes past the minimum that must be present in all sections when splitting.
-    pub split_buffer: u64,
+    pub split_buffer: usize,
     /// Number of steps to wait for a candidate to appear in at least one current section.
     pub join_timeout: u64,
     /// Number of steps to wait before shutting down if we fail to join.

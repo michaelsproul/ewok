@@ -60,7 +60,7 @@ impl Node {
 
     /// Minimum size that all sections must be before splitting.
     fn min_split_size(&self) -> usize {
-        self.params.min_section_size as usize + self.params.split_buffer as usize
+        self.params.min_section_size + self.params.split_buffer
     }
 
     /// Insert a vote into our local cache of votes.
@@ -200,7 +200,9 @@ impl Node {
 
         for node in self.peer_states.nodes_to_drop(step) {
             for block in self.our_current_blocks() {
-                if block.members.contains(&node) {
+                // Only vote to remove a node if we shouldn't be voting to merge.
+                if block.members.contains(&node) &&
+                   block.members.len() >= self.params.min_section_size {
                     info!("{}: voting to remove {} from: {:?}", self, node, block);
                     votes.push(Vote {
                                    from: block.clone(),
@@ -220,7 +222,7 @@ impl Node {
 
         for vote in merge_blocks(&self.current_blocks,
                                  self.our_name,
-                                 self.params.min_section_size as usize) {
+                                 self.params.min_section_size) {
             info!("{}: voting to merge from: {:?} to: {:?}",
                   self,
                   vote.from,

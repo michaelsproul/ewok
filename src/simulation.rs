@@ -12,7 +12,7 @@ use consistency::check_consistency;
 use message::Message;
 use message::MessageContent::*;
 use params::{NodeParams, SimulationParams};
-use random::{sample, do_with_probability};
+use random::{sample, do_with_probability, seed};
 use random_events::RandomEvents;
 use self::detail::DisconnectedPair;
 
@@ -231,7 +231,7 @@ impl Simulation {
     }
 
     /// Run the simulation, returning Ok iff the network was consistent upon termination.
-    pub fn run(&mut self) -> Result<(), ()> {
+    pub fn run(&mut self) -> Result<(), [u32; 4]> {
         let max_extra_steps = 1000;
         // TODO: Use actual max value (probably from `NodeParams`) once the RmConv rule is added.
         let max_timeout_steps = 60;
@@ -299,5 +299,6 @@ impl Simulation {
                 "there were undelivered messages at termination");
 
         check_consistency(&self.nodes, self.node_params.min_section_size as usize)
+            .map_err(|_| seed())
     }
 }

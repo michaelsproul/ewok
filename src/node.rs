@@ -119,8 +119,8 @@ impl Node {
     pub fn update_peer_states(&mut self, step: u64) {
         for name in nodes_in_any(&self.current_blocks) {
             // Check whether this node is part of all blocks it should be part of.
-            let in_all = section_blocks(&self.current_blocks, name)
-                .all(|b| b.members.contains(&name));
+            let in_all =
+                section_blocks(&self.current_blocks, name).all(|b| b.members.contains(&name));
 
             if in_all {
                 self.peer_states.in_all_current(name, step);
@@ -208,9 +208,7 @@ impl Node {
 
         for node in self.peer_states.nodes_to_drop(step) {
             for block in self.our_current_blocks() {
-                // Only vote to remove a node if we shouldn't be voting to merge.
-                if block.members.contains(&node) &&
-                   block.members.len() >= self.params.min_section_size {
+                if block.members.contains(&node) {
                     info!("{}: voting to remove {} from: {:?}", self, node, block);
                     votes.push(Vote {
                                    from: block.clone(),

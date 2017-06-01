@@ -163,8 +163,8 @@ fn successors<'a>(vote_counts: &'a VoteCounts,
     Box::new(iter)
 }
 
-/// Compute the set of current blocks from a set of valid blocks.
-pub fn compute_current_blocks(valid_blocks: BTreeSet<Block>) -> CurrentBlocks {
+/// Compute the set of candidates for current blocks from a set of valid blocks.
+pub fn compute_current_candidate_blocks(valid_blocks: BTreeSet<Block>) -> ValidBlocks {
     // 1. Sort by version.
     let mut blocks_by_version: BTreeMap<u64, BTreeSet<Block>> = btreemap!{};
     for block in valid_blocks {
@@ -186,17 +186,23 @@ pub fn compute_current_blocks(valid_blocks: BTreeSet<Block>) -> CurrentBlocks {
         current_blocks.extend(new_current);
     }
 
-    // 3. Remove all blocks whose prefix is a descendant of any other current prefix
-    let current_blocks: BTreeSet<Block> = current_blocks
+    current_blocks
+}
+
+pub fn compute_current_blocks(candidate_blocks: &BTreeSet<Block>) -> CurrentBlocks {
+    let current_pfxs: BTreeSet<Prefix> = candidate_blocks.into_iter().map(|b| b.prefix).collect();
+    // Remove all blocks whose prefix is a descendant of any other current prefix
+    let current_blocks: BTreeSet<Block> = candidate_blocks
         .into_iter()
         .filter(|b| {
                     !current_pfxs
                          .iter()
                          .any(|pfx| pfx.is_prefix_of(&b.prefix) && *pfx != b.prefix)
                 })
+        .cloned()
         .collect();
 
-    // 4. Remove blocks with fewer members than any other block with the same prefix
+    // Remove blocks with fewer members than any other block with the same prefix
     let mut max_members: BTreeMap<Prefix, usize> = btreemap!{};
     for block in current_blocks.iter() {
         let members_for_pfx = max_members.entry(block.prefix).or_insert(0);
@@ -292,7 +298,8 @@ mod test {
             },
         ];
 
-        let current_blocks = compute_current_blocks(valid_blocks);
+        let candidates = compute_current_candidate_blocks(valid_blocks);
+        let current_blocks = compute_current_blocks(&candidates);
 
         assert_eq!(expected_current, current_blocks);
     }

@@ -3,7 +3,8 @@ use message::MessageContent;
 use message::MessageContent::*;
 use name::Name;
 use block::{Block, Vote, ValidBlocks, CurrentBlocks, VoteCounts, new_valid_blocks,
-            compute_current_blocks, our_blocks, is_ambiguous, section_blocks};
+            compute_current_blocks, compute_current_candidate_blocks, our_blocks, is_ambiguous,
+            section_blocks};
 use peer_state::{PeerStates, nodes_in_any};
 use params::NodeParams;
 use split::split_blocks;
@@ -18,6 +19,8 @@ pub struct Node {
     pub our_name: Name,
     /// All valid blocks.
     pub valid_blocks: ValidBlocks,
+    /// Our current candidates for current blocks.
+    pub current_candidate_blocks: ValidBlocks,
     /// Our current blocks.
     pub current_blocks: CurrentBlocks,
     /// Step number of when our prefix became ambiguous
@@ -51,7 +54,8 @@ impl Node {
         let mut node = Node {
             our_name: name,
             valid_blocks: current_blocks.clone(),
-            current_blocks,
+            current_blocks: current_blocks.clone(),
+            current_candidate_blocks: current_blocks,
             ambiguous_step,
             vote_counts: BTreeMap::new(),
             peer_states: PeerStates::new(params.clone()),
@@ -103,11 +107,12 @@ impl Node {
         // Any of the existing current blocks or the new valid blocks could be
         // in the next set of current blocks.
         let mut potentially_current = btreeset!{};
-        potentially_current.extend(mem::replace(&mut self.current_blocks, btreeset!{}));
+        potentially_current.extend(mem::replace(&mut self.current_candidate_blocks, btreeset!{}));
         potentially_current.extend(new_votes.iter().map(|&(ref vote, _)| vote.to.clone()));
 
-        mem::replace(&mut self.current_blocks,
-                     compute_current_blocks(potentially_current));
+        mem::replace(&mut self.current_candidate_blocks,
+                     compute_current_candidate_blocks(potentially_current));
+        self.current_blocks = compute_current_blocks(&self.current_candidate_blocks);
         if is_ambiguous(&self.current_blocks, self.our_name) {
             self.ambiguous_step = self.ambiguous_step.or(Some(step));
         } else {

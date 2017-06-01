@@ -4,7 +4,7 @@ use message::MessageContent::*;
 use name::Name;
 use block::{Block, Vote, ValidBlocks, CurrentBlocks, VoteCounts, new_valid_blocks,
             compute_current_blocks, our_blocks, is_ambiguous, section_blocks};
-use peer_state::{PeerStates, nodes_in_all, nodes_in_any};
+use peer_state::{PeerStates, nodes_in_any};
 use params::NodeParams;
 use split::split_blocks;
 use merge::merge_blocks;
@@ -117,21 +117,16 @@ impl Node {
 
     /// Update peer states for changes to the set of current blocks.
     pub fn update_peer_states(&mut self, step: u64) {
-        let (in_all, in_some) = {
-            let our_section_blocks = self.our_current_section_blocks().cloned().collect();
-            let in_all = nodes_in_all(&our_section_blocks);
-            let in_any = nodes_in_any(&our_section_blocks);
-            let in_some = &in_any - &in_all;
+        for name in nodes_in_any(&self.current_blocks) {
+            // Check whether this node is part of all blocks it should be part of.
+            let in_all = section_blocks(&self.current_blocks, name)
+                .all(|b| b.members.contains(&name));
 
-            (in_all, in_some)
-        };
-
-        for name in in_all {
-            self.peer_states.in_all_current(name, step);
-        }
-
-        for name in in_some {
-            self.peer_states.in_some_current(name, step);
+            if in_all {
+                self.peer_states.in_all_current(name, step);
+            } else {
+                self.peer_states.in_some_current(name, step);
+            }
         }
     }
 

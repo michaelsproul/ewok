@@ -204,22 +204,16 @@ pub fn compute_current_blocks(candidate_blocks: &BTreeSet<Block>) -> CurrentBloc
 
     // Remove blocks with fewer members than any other block with the same prefix
     let mut max_members: BTreeMap<Prefix, usize> = btreemap!{};
-    for block in current_blocks.iter() {
+    for block in &current_blocks {
         let members_for_pfx = max_members.entry(block.prefix).or_insert(0);
         if *members_for_pfx < block.members.len() {
             *members_for_pfx = block.members.len();
         }
     }
-    let current_blocks = current_blocks
-        .into_iter()
-        .filter(|b| if let Some(&len) = max_members.get(&b.prefix) {
-                    len == b.members.len()
-                } else {
-                    false
-                })
-        .collect();
-
     current_blocks
+        .into_iter()
+        .filter(|b| Some(&b.members.len()) == max_members.get(&b.prefix))
+        .collect()
 }
 
 /// Return true if `voters` form a quorum of `members`.

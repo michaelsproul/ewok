@@ -186,6 +186,33 @@ pub fn compute_current_blocks(valid_blocks: BTreeSet<Block>) -> CurrentBlocks {
         current_blocks.extend(new_current);
     }
 
+    // 3. Remove all blocks whose prefix is a descendant of any other current prefix
+    let current_blocks: BTreeSet<Block> = current_blocks
+        .into_iter()
+        .filter(|b| {
+                    !current_pfxs
+                         .iter()
+                         .any(|pfx| pfx.is_prefix_of(&b.prefix) && *pfx != b.prefix)
+                })
+        .collect();
+
+    // 4. Remove blocks with fewer members than any other block with the same prefix
+    let mut max_members: BTreeMap<Prefix, usize> = btreemap!{};
+    for block in current_blocks.iter() {
+        let members_for_pfx = max_members.entry(block.prefix).or_insert(0);
+        if *members_for_pfx < block.members.len() {
+            *members_for_pfx = block.members.len();
+        }
+    }
+    let current_blocks = current_blocks
+        .into_iter()
+        .filter(|b| if let Some(&len) = max_members.get(&b.prefix) {
+                    len == b.members.len()
+                } else {
+                    false
+                })
+        .collect();
+
     current_blocks
 }
 
@@ -257,8 +284,16 @@ mod test {
             },
         ];
 
-        let current_blocks = compute_current_blocks(valid_blocks.clone());
+        let expected_current = btreeset![
+            Block {
+                prefix: Prefix::empty(),
+                version: 0,
+                members: btreeset!{ Name(0), short_name(0b10000000) }
+            },
+        ];
 
-        assert_eq!(valid_blocks, current_blocks);
+        let current_blocks = compute_current_blocks(valid_blocks);
+
+        assert_eq!(expected_current, current_blocks);
     }
 }

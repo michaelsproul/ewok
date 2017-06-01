@@ -28,11 +28,10 @@ fn mergeconv_rule(current_blocks: &CurrentBlocks,
     match ambiguous_step {
         Some(amb_step) if step - amb_step > mergeconv_timeout => {
             let mut prefixes = our_prefixes(current_blocks, our_name);
-            let shortest = prefixes
-                .iter()
-                .min_by_key(|pfx| pfx.bit_count())
-                .unwrap()   // safe, because there will be at least one
-                .clone();
+            let shortest = *prefixes
+                                .iter()
+                                .min_by_key(|pfx| pfx.bit_count())
+                                .unwrap(); // safe, because there will be at least one
             // drop the shortest prefix and merge all blocks with longer prefixes
             prefixes.remove(&shortest);
             let mut votes = btreeset!{};

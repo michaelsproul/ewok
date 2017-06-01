@@ -167,7 +167,7 @@ impl Prefix {
     /// Returns `true` if `self` is a prefix of `other`.
     pub fn is_prefix_of(&self, other: &Prefix) -> bool {
         let i = self.name.common_prefix(other.name);
-        i >= self.bit_count
+        i >= self.bit_count && self.bit_count <= other.bit_count
     }
 
     /// Returns `true` if the `other` prefix differs in exactly one bit from this one.

@@ -163,8 +163,8 @@ fn successors<'a>(vote_counts: &'a VoteCounts,
     Box::new(iter)
 }
 
-/// Compute the set of current blocks from a set of valid blocks.
-pub fn compute_current_blocks(valid_blocks: BTreeSet<Block>) -> CurrentBlocks {
+/// Compute the set of candidates for current blocks from a set of valid blocks.
+pub fn compute_current_candidate_blocks(valid_blocks: BTreeSet<Block>) -> ValidBlocks {
     // 1. Sort by version.
     let mut blocks_by_version: BTreeMap<u64, BTreeSet<Block>> = btreemap!{};
     for block in valid_blocks {
@@ -187,6 +187,33 @@ pub fn compute_current_blocks(valid_blocks: BTreeSet<Block>) -> CurrentBlocks {
     }
 
     current_blocks
+}
+
+pub fn compute_current_blocks(candidate_blocks: &BTreeSet<Block>) -> CurrentBlocks {
+    let current_pfxs: BTreeSet<Prefix> = candidate_blocks.into_iter().map(|b| b.prefix).collect();
+    // Remove all blocks whose prefix is a descendant of any other current prefix
+    let current_blocks: BTreeSet<Block> = candidate_blocks
+        .into_iter()
+        .filter(|b| {
+                    !current_pfxs
+                         .iter()
+                         .any(|pfx| pfx.is_prefix_of(&b.prefix) && *pfx != b.prefix)
+                })
+        .cloned()
+        .collect();
+
+    // Remove blocks with fewer members than any other block with the same prefix
+    let mut max_members: BTreeMap<Prefix, usize> = btreemap!{};
+    for block in &current_blocks {
+        let members_for_pfx = max_members.entry(block.prefix).or_insert(0);
+        if *members_for_pfx < block.members.len() {
+            *members_for_pfx = block.members.len();
+        }
+    }
+    current_blocks
+        .into_iter()
+        .filter(|b| Some(&b.members.len()) == max_members.get(&b.prefix))
+        .collect()
 }
 
 /// Return true if `voters` form a quorum of `members`.
@@ -257,8 +284,17 @@ mod test {
             },
         ];
 
-        let current_blocks = compute_current_blocks(valid_blocks.clone());
+        let expected_current = btreeset![
+            Block {
+                prefix: Prefix::empty(),
+                version: 0,
+                members: btreeset!{ Name(0), short_name(0b10000000) }
+            },
+        ];
 
-        assert_eq!(valid_blocks, current_blocks);
+        let candidates = compute_current_candidate_blocks(valid_blocks);
+        let current_blocks = compute_current_blocks(&candidates);
+
+        assert_eq!(expected_current, current_blocks);
     }
 }

@@ -234,6 +234,18 @@ impl Prefix {
             None
         }
     }
+
+    /// Return true if `self` is a sibling of `other` or any of `other`'s ancestors.
+    ///
+    /// E.g. siblings of ancestors of 000 are 001, 01 and 1.
+    pub fn is_sibling_of_ancestor_of(&self, other: &Prefix) -> bool {
+        if self.bit_count > other.bit_count {
+            return false;
+        }
+        let ancestor = Prefix::new(self.bit_count,
+                                   other.name.with_flipped_bit(self.bit_count - 1));
+        &ancestor == self
+    }
 }
 
 impl PartialEq<Prefix> for Prefix {
@@ -273,5 +285,23 @@ impl Binary for Prefix {
 impl Debug for Prefix {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         Binary::fmt(self, formatter)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn sibling_ancestor() {
+        let p000 = Prefix::short(3, 0);
+        let p001 = Prefix::short(3, 0b00100000);
+        let p01 = Prefix::short(2, 0b01000000);
+        let p10 = Prefix::short(2, 0b10000000);
+        let p1 = Prefix::short(1, 0b10000000);
+        assert!(p001.is_sibling_of_ancestor_of(&p000));
+        assert!(p01.is_sibling_of_ancestor_of(&p000));
+        assert!(p1.is_sibling_of_ancestor_of(&p000));
+        assert!(!p10.is_sibling_of_ancestor_of(&p000));
     }
 }

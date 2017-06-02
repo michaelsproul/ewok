@@ -43,6 +43,21 @@ impl fmt::Display for Node {
     }
 }
 
+impl fmt::Debug for Node {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f,
+               "Node({}): {} filtered messages;   {} valid blocks;   {} vote counts with max \
+               \"to\" blocks of {:?};   {} current blocks: {:#?}",
+               self.our_name,
+               self.message_filter.len(),
+               self.valid_blocks.len(),
+               self.vote_counts.len(),
+               self.vote_counts.values().map(BTreeMap::len).max(),
+               self.current_blocks.len(),
+               self.current_blocks)
+    }
+}
+
 impl Node {
     /// Create a new node which starts from a given set of valid and current blocks.
     pub fn new(name: Name, current_blocks: CurrentBlocks, params: NodeParams, step: u64) -> Self {
@@ -114,7 +129,7 @@ impl Node {
                      compute_current_candidate_blocks(potentially_current));
         self.current_blocks = compute_current_blocks(&self.current_candidate_blocks);
         if is_ambiguous(&self.current_blocks, self.our_name) {
-            self.ambiguous_step = self.ambiguous_step.or(Some(step));
+            self.ambiguous_step = self.ambiguous_step.or_else(|| Some(step));
         } else {
             self.ambiguous_step = None;
         }
@@ -202,7 +217,7 @@ impl Node {
         for node in self.peer_states.nodes_to_add(step) {
             for block in self.our_current_blocks() {
                 if Self::could_be_added(node, block) {
-                    info!("{}: voting to add {} to: {:?}", self, node, block);
+                    trace!("{}: voting to add {} to: {:?}", self, node, block);
                     votes.push(Vote {
                                    from: block.clone(),
                                    to: block.add_node(node),
@@ -214,7 +229,7 @@ impl Node {
         for node in self.peer_states.nodes_to_drop(step) {
             for block in self.our_current_blocks() {
                 if block.members.contains(&node) {
-                    info!("{}: voting to remove {} from: {:?}", self, node, block);
+                    trace!("{}: voting to remove {} from: {:?}", self, node, block);
                     votes.push(Vote {
                                    from: block.clone(),
                                    to: block.remove_node(node),
@@ -224,10 +239,10 @@ impl Node {
         }
 
         for vote in split_blocks(&self.current_blocks, self.our_name, self.min_split_size()) {
-            info!("{}: voting to split from: {:?} to: {:?}",
-                  self,
-                  vote.from,
-                  vote.to);
+            trace!("{}: voting to split from: {:?} to: {:?}",
+                   self,
+                   vote.from,
+                   vote.to);
             votes.push(vote);
         }
 
@@ -237,10 +252,10 @@ impl Node {
                                  self.params.min_section_size,
                                  self.params.mergeconv_timeout,
                                  step) {
-            info!("{}: voting to merge from: {:?} to: {:?}",
-                  self,
-                  vote.from,
-                  vote.to);
+            trace!("{}: voting to merge from: {:?} to: {:?}",
+                   self,
+                   vote.from,
+                   vote.to);
             votes.push(vote);
         }
 
@@ -309,6 +324,10 @@ impl Node {
     pub fn should_shutdown(&self, step: u64) -> bool {
         step >= self.step_created + self.params.self_shutdown_timeout &&
         self.our_current_blocks().count() == 0
+    }
+
+    pub fn step_created(&self) -> u64 {
+        self.step_created
     }
 
     /// Handle a message intended for us and return messages we'd like to send.

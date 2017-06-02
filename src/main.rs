@@ -17,11 +17,12 @@ fn main() {
         prob_disconnect: 0.05,
         // Gives ~95% chance that a pair will reconnect within 5 steps
         prob_reconnect: 0.45,
+        max_conflicting_blocks: 20,
     };
 
     let node_params = NodeParams {
-        min_section_size: 4,
-        split_buffer: 0,
+        min_section_size: 8,
+        split_buffer: 1,
         join_timeout: 20,
         rmconv_timeout: 20,
         mergeconv_timeout: 20,

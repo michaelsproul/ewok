@@ -22,7 +22,7 @@ thread_local! {
 
     static WEAK_RNG: RefCell<XorShiftRng> = RefCell::new(
         SEED.with(|seed| {
-            info!("Seed: {:?}", seed);
+            println!("Seed: {:?}", seed);
             XorShiftRng::from_seed(*seed)
         })
     );

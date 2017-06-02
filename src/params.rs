@@ -16,6 +16,9 @@ pub struct SimulationParams {
     pub prob_disconnect: f64,
     /// Probability that a lost two-way connection will be re-established on any given step.
     pub prob_reconnect: f64,
+    /// The maximum number of permissible current blocks for a single section. Exceeding this will
+    /// cause the process to panic.
+    pub max_conflicting_blocks: usize,
 }
 
 

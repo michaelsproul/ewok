@@ -73,7 +73,9 @@ fn main() {
     let agreement_re = Regex::new(r"^Node\((?P<node>[0-9a-f]{6}\.\.)\): received agreement for Vote \{ from: Block \{ prefix: Prefix\((?P<pfrom>[01]*)\), version: (?P<vfrom>\d+), members: \{(?P<mfrom>[0-9a-f]{6}\.\.(, [0-9a-f]{6}\.\.)*)\} \}, to: Block \{ prefix: Prefix\((?P<pto>[01]*)\), version: (?P<vto>\d+), members: \{(?P<mto>[0-9a-f]{6}\.\.(, [0-9a-f]{6}\.\.)*)\} \} \}").unwrap();
 
     let matches = App::new("ewok_graph")
-        .about("This tool takes a log output from an Ewok simulation and generates a file describing a graph of blocks in the DOT language. The resulting file can then be converted into a graphics file using the 'dot' utility from the 'graphviz' toolset.")
+        .about("This tool takes a log output from an Ewok simulation and generates a file \
+               describing a graph of blocks in the DOT language. The resulting file can then be \
+               converted into a graphics file using the 'dot' utility from the 'graphviz' toolset.")
         .arg(Arg::with_name("output")
                  .short("o")
                  .long("output")

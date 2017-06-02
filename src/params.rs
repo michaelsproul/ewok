@@ -30,9 +30,6 @@ pub struct NodeParams {
     pub split_buffer: usize,
     /// Number of steps to wait for a candidate to appear in at least one current section.
     pub join_timeout: u64,
-    /// Number of steps to wait before we vote for a removal of a node when it disappears from a
-    /// block.
-    pub rmconv_timeout: u64,
     /// Number of steps to wait before shutting down if we fail to join.
     pub self_shutdown_timeout: u64,
 }

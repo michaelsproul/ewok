@@ -239,7 +239,7 @@ impl Prefix {
     ///
     /// E.g. siblings of ancestors of 000 are 001, 01 and 1.
     pub fn is_sibling_of_ancestor_of(&self, other: &Prefix) -> bool {
-        if self.bit_count > other.bit_count {
+        if self.bit_count > other.bit_count || self.bit_count == 0 {
             return false;
         }
         let ancestor = Prefix::new(self.bit_count,

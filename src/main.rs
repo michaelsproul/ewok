@@ -25,7 +25,6 @@ fn main() {
         split_buffer: 1,
         join_timeout: 20,
         rmconv_timeout: 20,
-        mergeconv_timeout: 20,
         self_shutdown_timeout: 100,
     };
 

@@ -188,14 +188,9 @@ fn one_join_one_drop() {
         p1() => min_section_size,
     };
 
-    // NOTE: the add is before the remove because the remove seemed to consistently
-    // accumulate first when they were both fired at step 0
-    // (this may change with changes to timeouts).
     let schedule = EventSchedule::new(btreemap! {
         0 => vec![
-            AddNode(p0().substituted_in(random()))
-        ],
-        2 => vec![
+            AddNode(p0().substituted_in(random())),
             RemoveNodeFrom(p0()),
         ],
     });
@@ -205,6 +200,34 @@ fn one_join_one_drop() {
         ..default_params()
     };
 
+    let node_params = NodeParams {
+        min_section_size,
+        ..default_node_params()
+    };
+
+    let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
+    simulation.run().unwrap();
+}
+
+#[test]
+fn triple_drop_merge() {
+    init_logging();
+
+    let min_section_size = 10;
+    let sections = btreemap! {
+        p0() => min_section_size,
+        p1() => min_section_size,
+    };
+
+    let schedule = EventSchedule::new(btreemap! {
+        0 => vec![
+            RemoveNodeFrom(p0()),
+            RemoveNodeFrom(p0()),
+            RemoveNodeFrom(p0())
+        ],
+    });
+
+    let params = default_params();
     let node_params = NodeParams {
         min_section_size,
         ..default_node_params()

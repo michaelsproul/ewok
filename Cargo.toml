@@ -9,10 +9,16 @@ itertools = "0.6"
 maplit = "0.1"
 log = "0.3"
 env_logger = "0.4"
+regex = "0.2"
+clap = "2.24"
 
 [[bin]]
 name = "ewok"
 doc = false
+
+[[bin]]
+name = "graph"
+path = "src/bin/graph.rs"
 
 [profile.release]
 debug = true

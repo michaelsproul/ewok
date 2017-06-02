@@ -21,14 +21,16 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>, min_section_size: usize) 
     for (prefix, versions) in &sections {
         if versions.len() > 1 {
             failed = true;
-            info!("multiple versions of {:?}, they are: {:#?}",
-                  prefix,
-                  versions);
+            error!("multiple versions of {:?}, they are: {:#?}",
+                   prefix,
+                   versions);
         } else {
             let members = &versions.iter().next().unwrap().members;
-            if members.len() < min_section_size {
+            // Allow a quorum if we have only one section, otherwise require `min_section_size`.
+            if (sections.len() == 1 && members.len() * 2 <= min_section_size) ||
+               (sections.len() > 1 && members.len() < min_section_size) {
                 failed = true;
-                info!("section too small: {:?} with members {:?}", prefix, members);
+                error!("section too small: {:?} with members {:?}", prefix, members);
             }
         }
     }
@@ -36,12 +38,12 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>, min_section_size: usize) 
     for (p1, p2) in sections.keys().tuple_combinations() {
         if p1.is_compatible(p2) {
             failed = true;
-            info!("prefixes {:?} and {:?} overlap", p1, p2);
+            error!("prefixes {:?} and {:?} overlap", p1, p2);
         }
     }
 
     if failed {
-        info!("network not consistent: see above");
+        error!("network not consistent: see above");
         Err(())
     } else {
         info!("network is consistent!");

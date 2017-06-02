@@ -14,25 +14,18 @@ use ewok::random::random;
 // so we can easily run all the tests with different values.
 fn default_params() -> SimulationParams {
     SimulationParams {
-        max_num_nodes: 0,
-        prob_join: 0.0,
-        num_steps: 1000,
         max_delay: 5,
-        prob_drop: 0.00,
-        drop_step: 0,
-        prob_disconnect: 0.00,
-        prob_reconnect: 0.00,
         max_conflicting_blocks: 20,
-    }
-}
-
-fn default_node_params() -> NodeParams {
-    NodeParams {
-        min_section_size: 0,
-        split_buffer: 1,
-        join_timeout: 10,
-        rmconv_timeout: 10,
-        self_shutdown_timeout: 30,
+        grow_prob_join: 0.0,
+        grow_prob_drop: 0.0,
+        prob_churn: 0.0,
+        shrink_prob_join: 0.0,
+        shrink_prob_drop: 0.0,
+        prob_disconnect: 0.0,
+        prob_reconnect: 0.0,
+        start_random_events_step: 0,
+        grow_complete: 0,
+        stable_steps: 1000,
     }
 }
 
@@ -59,12 +52,14 @@ fn p11() -> Prefix {
 fn four_sections() {
     init_logging();
 
-    let min_section_size = 10;
+    let params = default_params();
+    let node_params = NodeParams::default();
+
     let sections = btreemap! {
-        p00() => min_section_size,
-        p01() => min_section_size,
-        p10() => min_section_size,
-        p11() => min_section_size
+        p00() => node_params.min_section_size,
+        p01() => node_params.min_section_size,
+        p10() => node_params.min_section_size,
+        p11() => node_params.min_section_size
     };
 
     let event_schedule = EventSchedule::new(btreemap! {
@@ -74,12 +69,6 @@ fn four_sections() {
         ],
         3 => vec![RemoveNodeFrom(p01())]
     });
-
-    let params = default_params();
-    let node_params = NodeParams {
-        min_section_size,
-        ..default_node_params()
-    };
 
     let mut simulation = Simulation::new_from(sections, event_schedule, params, node_params);
 
@@ -92,6 +81,16 @@ fn two_drop_one_join() {
     init_logging();
 
     let num_initial = 6;
+    let params = SimulationParams {
+        max_delay: 100,
+        ..default_params()
+    };
+    let node_params = NodeParams {
+        min_section_size: 0,
+        split_buffer: 1000,
+        ..NodeParams::default()
+    };
+
     let sections = btreemap! {
         Prefix::empty() => num_initial,
     };
@@ -104,17 +103,6 @@ fn two_drop_one_join() {
         ],
     });
 
-    let params = SimulationParams {
-        max_delay: 100,
-        max_num_nodes: num_initial + 1,
-        ..default_params()
-    };
-    let node_params = NodeParams {
-        min_section_size: 0,
-        split_buffer: 1000,
-        ..default_node_params()
-    };
-
     let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
 
     simulation.run().unwrap();
@@ -125,10 +113,12 @@ fn two_drop_one_join() {
 fn two_drop_merge() {
     init_logging();
 
-    let min_section_size = 5;
+    let params = default_params();
+    let node_params = NodeParams::default();
+
     let sections = btreemap! {
-        p0() => min_section_size,
-        p1() => min_section_size,
+        p0() => node_params.min_section_size,
+        p1() => node_params.min_section_size,
     };
 
     let schedule = EventSchedule::new(btreemap! {
@@ -137,12 +127,6 @@ fn two_drop_merge() {
             RemoveNodeFrom(p0()),
         ],
     });
-
-    let params = default_params();
-    let node_params = NodeParams {
-        min_section_size,
-        ..default_node_params()
-    };
 
     let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
     simulation.run().unwrap();
@@ -152,11 +136,13 @@ fn two_drop_merge() {
 fn cascading_merge() {
     init_logging();
 
-    let min_section_size = 5;
+    let params = default_params();
+    let node_params = NodeParams::default();
+
     let sections = btreemap! {
-        p0() => min_section_size,
-        p10() => min_section_size,
-        p11() => min_section_size,
+        p0() => node_params.min_section_size,
+        p10() => node_params.min_section_size,
+        p11() => node_params.min_section_size,
     };
 
     let schedule = EventSchedule::new(btreemap! {
@@ -164,12 +150,6 @@ fn cascading_merge() {
             RemoveNodeFrom(p0()),
         ],
     });
-
-    let params = default_params();
-    let node_params = NodeParams {
-        min_section_size,
-        ..default_node_params()
-    };
 
     let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
     simulation.run().unwrap();
@@ -181,28 +161,20 @@ fn cascading_merge() {
 fn one_join_one_drop() {
     init_logging();
 
-    let min_section_size = 5;
+    let node_params = NodeParams::default();
+    let params = default_params();
+
     let sections = btreemap! {
-        p0() => min_section_size,
-        p1() => min_section_size,
+        p0() => node_params.min_section_size,
+        p1() => node_params.min_section_size,
     };
 
     let schedule = EventSchedule::new(btreemap! {
         0 => vec![
             AddNode(p0().substituted_in(random())),
             RemoveNodeFrom(p0()),
-        ],
+        ]
     });
-
-    let params = SimulationParams {
-        max_num_nodes: 2 * min_section_size + 1,
-        ..default_params()
-    };
-
-    let node_params = NodeParams {
-        min_section_size,
-        ..default_node_params()
-    };
 
     let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
     simulation.run().unwrap();
@@ -212,10 +184,12 @@ fn one_join_one_drop() {
 fn triple_drop_merge() {
     init_logging();
 
-    let min_section_size = 10;
+    let node_params = NodeParams::default();
+    let params = default_params();
+
     let sections = btreemap! {
-        p0() => min_section_size,
-        p1() => min_section_size,
+        p0() => node_params.min_section_size,
+        p1() => node_params.min_section_size,
     };
 
     let schedule = EventSchedule::new(btreemap! {
@@ -225,12 +199,6 @@ fn triple_drop_merge() {
             RemoveNodeFrom(p0())
         ],
     });
-
-    let params = default_params();
-    let node_params = NodeParams {
-        min_section_size,
-        ..default_node_params()
-    };
 
     let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
     simulation.run().unwrap();

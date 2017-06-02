@@ -318,7 +318,7 @@ impl Node {
         let to_send = match message.content {
             NodeJoined => {
                 let joining_node = message.sender;
-                info!("{}: received join message for: {}", self, joining_node);
+                debug!("{}: received join message for: {}", self, joining_node);
 
                 // Mark the peer as having joined so that we vote to keep adding it.
                 self.peer_states.node_joined(joining_node, step);
@@ -327,29 +327,29 @@ impl Node {
                 vec![self.construct_bootstrap_msg(joining_node)]
             }
             VoteMsg(vote) => {
-                info!("{}: received {:?} from {}", self, vote, message.sender);
+                debug!("{}: received {:?} from {}", self, vote, message.sender);
                 self.add_vote(vote, Some(message.sender))
             }
             VoteAgreedMsg((vote, voters)) => {
-                info!("{}: received agreement for {:?} from {}",
-                      self,
-                      vote,
-                      message.sender);
+                debug!("{}: received agreement for {:?} from {}",
+                       self,
+                       vote,
+                       message.sender);
                 self.add_vote(vote, voters)
             }
             BootstrapMsg(vote_counts) => {
-                info!("{}: applying bootstrap message from {}",
-                      self,
-                      message.sender);
+                debug!("{}: applying bootstrap message from {}",
+                       self,
+                       message.sender);
                 self.apply_bootstrap_msg(vote_counts)
             }
             ConnectionLost => {
-                info!("{}: lost our connection to {}", self, message.sender);
+                debug!("{}: lost our connection to {}", self, message.sender);
                 self.peer_states.disconnected(message.sender, step);
                 vec![]
             }
             ConnectionRegained => {
-                info!("{}: regained our connection to {}", self, message.sender);
+                debug!("{}: regained our connection to {}", self, message.sender);
                 self.peer_states.reconnected(message.sender, step);
                 vec![]
             }

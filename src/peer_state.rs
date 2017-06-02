@@ -128,7 +128,7 @@ impl PeerStates {
         if let Disconnected { previous_state, .. } = state {
             *state_ptr = *previous_state;
         } else {
-            info!("warning: out-of-order reconnect");
+            warn!("warning: out-of-order reconnect");
             *state_ptr = state;
         }
     }

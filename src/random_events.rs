@@ -5,6 +5,7 @@ use name::Name;
 use node::Node;
 use event::Event;
 use random::{random, do_with_probability};
+use simulation::Phase;
 
 pub struct RandomEvents {
     params: SimulationParams,
@@ -15,38 +16,33 @@ impl RandomEvents {
         RandomEvents { params }
     }
 
-    pub fn get_events(&self, step: u64, nodes: &BTreeMap<Name, Node>) -> Vec<Event> {
+    pub fn get_events(&self, phase: Phase, nodes: &BTreeMap<Name, Node>) -> Vec<Event> {
         let mut events = vec![];
 
         // Random join.
-        if do_with_probability(self.params.prob_join) {
-            events.extend(self.random_add(nodes));
+        if do_with_probability(self.params.prob_join(phase)) {
+            events.push(self.random_add());
         }
 
         // Random remove.
-        if step >= self.params.drop_step && do_with_probability(self.params.prob_drop) {
-            events.extend(self.random_remove(nodes));
+        if do_with_probability(self.params.prob_drop(phase)) {
+            events.push(self.random_remove(nodes));
         }
 
         events
     }
 
-    fn random_add(&self, nodes: &BTreeMap<Name, Node>) -> Vec<Event> {
-        if nodes.len() < self.params.max_num_nodes {
-            vec![Event::AddNode(random())]
-        } else {
-            vec![]
-        }
+    fn random_add(&self) -> Event {
+        Event::AddNode(random())
     }
 
-    fn random_remove(&self, nodes: &BTreeMap<Name, Node>) -> Vec<Event> {
-        Self::find_node_to_remove(nodes)
-            .map(Event::RemoveNode)
-            .into_iter()
-            .collect()
+    fn random_remove(&self, nodes: &BTreeMap<Name, Node>) -> Event {
+        Event::RemoveNode(Self::find_node_to_remove(nodes))
     }
 
-    fn find_node_to_remove(nodes: &BTreeMap<Name, Node>) -> Option<Name> {
-        sample_single(nodes.iter()).map(|(name, _)| *name)
+    fn find_node_to_remove(nodes: &BTreeMap<Name, Node>) -> Name {
+        sample_single(nodes.iter())
+            .map(|(name, _)| *name)
+            .unwrap()
     }
 }

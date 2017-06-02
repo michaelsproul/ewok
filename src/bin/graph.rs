@@ -6,6 +6,9 @@
 //! (The resulting images are large, so the SVG format is recommended for
 //! quality-conserving zooming.)
 //! The 'dot' utility can be found in the 'graphviz' package.
+
+#![cfg_attr(feature="cargo-clippy", allow(doc_markdown))]
+
 extern crate regex;
 extern crate clap;
 use regex::Regex;
@@ -28,9 +31,7 @@ struct Members(pub BTreeSet<String>);
 
 impl fmt::Display for Members {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut count = 0;
-        for name in &self.0 {
-            count += 1;
+        for (count, name) in self.0.iter().enumerate() {
             write!(f, "<font color=\"#{}\">{}</font>, ", name, name)?;
             if count % 3 == 0 {
                 write!(f, "<br/>")?;
@@ -98,10 +99,7 @@ fn main() {
         if let Some(caps) = agreement_re.captures(&line) {
             let block_from = Block {
                 prefix: caps["pfrom"].to_owned(),
-                version: caps["vfrom"]
-                    .parse()
-                    .ok()
-                    .expect("invalid version number"),
+                version: caps["vfrom"].parse().expect("invalid version number"),
                 members: Members(caps["mfrom"]
                                      .split(", ")
                                      .map(|s| s.to_owned())
@@ -109,10 +107,7 @@ fn main() {
             };
             let block_to = Block {
                 prefix: caps["pto"].to_owned(),
-                version: caps["vto"]
-                    .parse()
-                    .ok()
-                    .expect("invalid version number"),
+                version: caps["vto"].parse().expect("invalid version number"),
                 members: Members(caps["mto"].split(", ").map(|s| s.to_owned()).collect()),
             };
             let from_id = block_from.get_id();

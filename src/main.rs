@@ -20,8 +20,8 @@ fn main() {
     };
 
     let node_params = NodeParams {
-        min_section_size: 4,
-        split_buffer: 0,
+        min_section_size: 8,
+        split_buffer: 1,
         join_timeout: 20,
         rmconv_timeout: 20,
         mergeconv_timeout: 20,

@@ -287,12 +287,18 @@ impl Simulation {
             // Send pending votes independently of churn events
             for node in self.nodes.values_mut() {
                 self.network.send(step, node.broadcast_new_votes(step));
+                let our_current_blocks_len = node.our_current_blocks().count();
+                if our_current_blocks_len > 1 {
+                    info!("{}: have {} current blocks for our own section.",
+                          node,
+                          our_current_blocks_len);
+                }
             }
         }
 
         info!("-- final node states --");
         for node in self.nodes.values() {
-            info!("{}: current_blocks: {:#?}", node, node.current_blocks);
+            info!("{:?}", node);
         }
 
         assert!(ran_to_completion,

@@ -287,11 +287,19 @@ impl Simulation {
             // Send pending votes independently of churn events
             for node in self.nodes.values_mut() {
                 self.network.send(step, node.broadcast_new_votes(step));
-                let our_current_blocks_len = node.our_current_blocks().count();
-                if our_current_blocks_len > 1 {
-                    info!("{}: have {} current blocks for our own section.",
-                          node,
-                          our_current_blocks_len);
+                match node.our_current_blocks().count() {
+                    0 => {
+                        if step > node.step_created() + self.node_params.self_shutdown_timeout {
+                            // The node should have joined by now and received the votes showing it
+                            // existing in at least one current block.
+                            panic!("{:?}\ndoesn't have any current blocks", node)
+                        }
+                    }
+                    1 => (),
+                    count if count <= self.params.max_conflicting_blocks => {
+                        info!("{}: has {} current blocks for own section.", node, count)
+                    }
+                    count => panic!("{:?}\nhas {} current blocks for own section.", node, count),
                 }
             }
         }

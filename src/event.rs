@@ -9,7 +9,7 @@ use self::Event::*;
 pub enum Event {
     AddNode(Name),
     RemoveNode(Name),
-    RemoveNodeFrom(Prefix), 
+    RemoveNodeFrom(Prefix),
     //Reconnect(Name, Name)
     //Disconnect(Name, Name)
 }

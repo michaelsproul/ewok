@@ -22,6 +22,7 @@ fn default_params() -> SimulationParams {
         drop_step: 0,
         prob_disconnect: 0.00,
         prob_reconnect: 0.00,
+        max_conflicting_blocks: 20,
     }
 }
 

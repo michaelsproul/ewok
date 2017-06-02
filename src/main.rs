@@ -17,6 +17,7 @@ fn main() {
         prob_disconnect: 0.05,
         // Gives ~95% chance that a pair will reconnect within 5 steps
         prob_reconnect: 0.45,
+        max_conflicting_blocks: 20,
     };
 
     let node_params = NodeParams {

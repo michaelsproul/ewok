@@ -56,7 +56,7 @@ impl Block {
     }
 
     fn get_label(&self) -> String {
-        format!("<Prefix: ({})<br/>Version: {}<br/>Members: <br/>{}>",
+        format!("<<font point-size=\"40\">p[{}] v{}</font><br/>Members: <br/>{}>",
                 self.prefix,
                 self.version,
                 self.members)

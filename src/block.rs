@@ -9,6 +9,23 @@ pub struct Block {
     pub members: BTreeSet<Name>,
 }
 
+impl Block {
+    /// Returns `true` if `other` should be removed from the current blocks when `self` is a
+    /// current candidate.
+    fn outranks(&self, other: &Block) -> bool {
+        if self.prefix == other.prefix {
+            if self.members.len() != other.members.len() {
+                self.members.len() > other.members.len()
+            } else {
+                self.members > other.members
+            }
+        } else {
+            self.prefix.is_compatible(&other.prefix) &&
+            self.prefix.bit_count() < other.prefix.bit_count()
+        }
+    }
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Vote {
     pub from: Block,
@@ -190,29 +207,10 @@ pub fn compute_current_candidate_blocks(valid_blocks: BTreeSet<Block>) -> ValidB
 }
 
 pub fn compute_current_blocks(candidate_blocks: &BTreeSet<Block>) -> CurrentBlocks {
-    let current_pfxs: BTreeSet<Prefix> = candidate_blocks.into_iter().map(|b| b.prefix).collect();
-    // Remove all blocks whose prefix is a descendant of any other current prefix
-    let current_blocks: BTreeSet<Block> = candidate_blocks
-        .into_iter()
-        .filter(|b| {
-                    !current_pfxs
-                         .iter()
-                         .any(|pfx| pfx.is_prefix_of(&b.prefix) && *pfx != b.prefix)
-                })
+    candidate_blocks
+        .iter()
+        .filter(|b| !candidate_blocks.iter().any(|c| c.outranks(b)))
         .cloned()
-        .collect();
-
-    // Remove blocks with fewer members than any other block with the same prefix
-    let mut max_members: BTreeMap<Prefix, usize> = btreemap!{};
-    for block in &current_blocks {
-        let members_for_pfx = max_members.entry(block.prefix).or_insert(0);
-        if *members_for_pfx < block.members.len() {
-            *members_for_pfx = block.members.len();
-        }
-    }
-    current_blocks
-        .into_iter()
-        .filter(|b| Some(&b.members.len()) == max_members.get(&b.prefix))
         .collect()
 }
 

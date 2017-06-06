@@ -212,7 +212,7 @@ impl Node {
             }
         }
 
-        for node in self.peer_states.nodes_to_drop(step) {
+        for node in self.peer_states.nodes_to_drop() {
             for block in self.our_current_blocks() {
                 if block.members.contains(&node) {
                     trace!("{}: voting to remove {} from: {:?}", self, node, block);

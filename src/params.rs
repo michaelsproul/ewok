@@ -5,9 +5,6 @@ use simulation::Phase::*;
 pub struct SimulationParams {
     /// Maximum number of steps a message can be delayed by before it's delivered.
     pub max_delay: u64,
-    /// The maximum number of permissible current blocks for a single section. Exceeding this will
-    /// cause the process to panic.
-    pub max_conflicting_blocks: usize,
     /// Probability of a node joining on a given step during the network growth phase.
     pub grow_prob_join: f64,
     /// Probability of a node leaving on a given step during the network growth phase.
@@ -75,6 +72,9 @@ pub struct NodeParams {
     pub join_timeout: u64,
     /// Number of steps to wait before shutting down if we fail to join.
     pub self_shutdown_timeout: u64,
+    /// The maximum number of permissible valid blocks for a single prefix and version pair.
+    /// Exceeding this will cause the process to panic.
+    pub max_conflicting_blocks: usize,
 }
 
 impl Default for NodeParams {
@@ -84,6 +84,7 @@ impl Default for NodeParams {
             split_buffer: 1,
             join_timeout: 20,
             self_shutdown_timeout: 100,
+            max_conflicting_blocks: 20,
         }
     }
 }

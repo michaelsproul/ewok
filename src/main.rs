@@ -9,7 +9,6 @@ fn main() {
 
     let params = SimulationParams {
         max_delay: 5,
-        max_conflicting_blocks: 20,
         grow_prob_join: 0.1,
         grow_prob_drop: 0.02,
         prob_churn: 0.05,

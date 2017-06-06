@@ -311,10 +311,7 @@ impl Simulation {
                             panic!("{:?}\ndoesn't have any current blocks", node)
                         }
                     }
-                    1 => (),
-                    count if count <= self.params.max_conflicting_blocks => {
-                        debug!("{}: has {} current blocks for own section.", node, count)
-                    }
+                    1 => node.check_conflicting_block_count(),
                     count => panic!("{:?}\nhas {} current blocks for own section.", node, count),
                 }
             }

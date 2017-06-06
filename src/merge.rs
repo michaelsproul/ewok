@@ -1,15 +1,49 @@
 use name::Name;
 use block::{Block, Vote, CurrentBlocks, our_blocks, blocks_for_prefix};
+use peer_state::PeerStates;
 use std::collections::BTreeSet;
 use std::cmp;
 
 pub fn merge_blocks(current_blocks: &CurrentBlocks,
+                    peer_states: &PeerStates,
                     our_name: Name,
                     min_section_size: usize)
                     -> Vec<Vote> {
-    merge_rule(current_blocks, our_name, min_section_size)
-        .into_iter()
-        .collect()
+    let mut result = merge_rule(current_blocks, our_name, min_section_size);
+    result.extend(force_merge_rule(current_blocks, peer_states, our_name));
+    result.into_iter().collect()
+}
+
+fn force_merge_rule(current_blocks: &CurrentBlocks,
+                    peer_states: &PeerStates,
+                    our_name: Name)
+                    -> BTreeSet<Vote> {
+    let mut votes = BTreeSet::new();
+    for candidate in current_blocks
+            .iter()
+            .filter(|&b| lost_quorum(b, peer_states)) {
+        for our_block in our_blocks(current_blocks, our_name).filter(|b| {
+                                                                         b.prefix.sibling() ==
+                                                                         Some(candidate.prefix)
+                                                                     }) {
+            let target = merged_block(candidate, our_block);
+            let vote = Vote {
+                from: our_block.clone(),
+                to: target,
+            };
+            votes.insert(vote);
+        }
+    }
+    votes
+}
+
+fn lost_quorum(block: &Block, peer_states: &PeerStates) -> bool {
+    let num_active = block
+        .members
+        .iter()
+        .filter(|&name| !peer_states.is_disconnected_from(name))
+        .count();
+    num_active <= block.members.len() / 2
 }
 
 fn merge_rule(current_blocks: &CurrentBlocks,

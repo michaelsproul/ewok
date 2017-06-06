@@ -233,6 +233,7 @@ impl Node {
         }
 
         for vote in merge_blocks(&self.current_blocks,
+                                 &self.peer_states,
                                  self.our_name,
                                  self.params.min_section_size) {
             trace!("{}: voting to merge from: {:?} to: {:?}",

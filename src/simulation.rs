@@ -341,7 +341,7 @@ impl Simulation {
 
         match self.phase {
             Starting => {
-                if step >= self.params.start_random_events_step {
+                if self.nodes.len() >= self.params.starting_complete {
                     if self.params.grow_prob_join > 0.0 {
                         Growth
                     } else {

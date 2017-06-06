@@ -18,7 +18,7 @@ fn main() {
         prob_disconnect: 0.05,
         // Gives ~95% chance that a pair will reconnect within 5 steps
         prob_reconnect: 0.45,
-        start_random_events_step: 150,
+        starting_complete: 16,
         grow_complete: 64,
         stable_steps: 100,
     };

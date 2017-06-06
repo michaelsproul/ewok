@@ -22,8 +22,8 @@ pub struct SimulationParams {
     pub prob_disconnect: f64,
     /// Probability that a lost two-way connection will be re-established on any given step.
     pub prob_reconnect: f64,
-    /// Step at which to start allowing random events (gives the network time to start up).
-    pub start_random_events_step: u64,
+    /// Network starting phase is complete once the size of network reaches this value.
+    pub starting_complete: usize,
     /// Network growth phase is complete once the size of network reaches this value.
     pub grow_complete: usize,
     /// Network stable phase is run for this number of steps.

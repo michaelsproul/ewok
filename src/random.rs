@@ -56,3 +56,8 @@ pub fn sample_single<T, I>(iterable: I) -> Option<T>
 pub fn do_with_probability(p: f64) -> bool {
     random::<f64>() <= p
 }
+
+/// Shuffle the mutable slice in place.
+pub fn shuffle<T>(values: &mut [T]) {
+    WEAK_RNG.with(|rng| rng.borrow_mut().shuffle(values))
+}

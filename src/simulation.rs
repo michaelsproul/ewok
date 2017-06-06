@@ -253,7 +253,7 @@ impl Simulation {
                     break;
                 }
                 if self.network.queue_is_empty() {
-                    if no_op_step_count > self.node_params.max_vote_timeout() {
+                    if no_op_step_count > self.node_params.join_timeout {
                         break;
                     } else {
                         no_op_step_count += 1;
@@ -327,7 +327,7 @@ impl Simulation {
             debug!("{:?}", node);
         }
 
-        assert!(no_op_step_count > self.node_params.max_vote_timeout(),
+        assert!(no_op_step_count > self.node_params.join_timeout,
                 "Votes were still being sent and received after {} extra steps during which no \
                  churn was triggered.",
                 max_extra_steps);

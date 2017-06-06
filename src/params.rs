@@ -1,4 +1,3 @@
-use std::cmp;
 use simulation::Phase;
 use simulation::Phase::*;
 
@@ -74,9 +73,6 @@ pub struct NodeParams {
     pub split_buffer: usize,
     /// Number of steps to wait for a candidate to appear in at least one current section.
     pub join_timeout: u64,
-    /// Number of steps to wait before we vote for a removal of a node when it disappears from a
-    /// block.
-    pub rmconv_timeout: u64,
     /// Number of steps to wait before shutting down if we fail to join.
     pub self_shutdown_timeout: u64,
 }
@@ -87,14 +83,7 @@ impl Default for NodeParams {
             min_section_size: 8,
             split_buffer: 1,
             join_timeout: 20,
-            rmconv_timeout: 20,
             self_shutdown_timeout: 100,
         }
-    }
-}
-
-impl NodeParams {
-    pub fn max_vote_timeout(&self) -> u64 {
-        cmp::max(self.join_timeout, self.rmconv_timeout)
     }
 }

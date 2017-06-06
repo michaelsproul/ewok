@@ -153,20 +153,16 @@ impl PeerStates {
     }
 
     /// Return all nodes that we should vote to remove.
-    pub fn nodes_to_drop(&self, step: u64) -> Vec<Name> {
+    pub fn nodes_to_drop(&self) -> Vec<Name> {
         self.states
             .iter()
             .filter(|&(_, state)| {
-                match *state {
-                    // rule:RmDc
-                    Disconnected { .. } => true,
-                    // rule:RmConv
-                    PartiallyLost { since } => {
-                        since < step.saturating_sub(self.params.rmconv_timeout)
-                    }
-                    _ => false,
-                }
-            })
+                        match *state {
+                            // rule:RmDc
+                            Disconnected { .. } => true,
+                            _ => false,
+                        }
+                    })
             .map(|(name, _)| *name)
             .collect()
     }

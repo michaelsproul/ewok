@@ -1,3 +1,7 @@
 language: rust
 rust:
     - stable
+script:
+    - cargo build --release --verbose
+    - cargo test --release --verbose
+    - RUST_LOG=ewok=info cargo run --release --verbose --bin ewok

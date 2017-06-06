@@ -53,6 +53,15 @@ mod detail {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Phase {
+    Starting,
+    Growth,
+    Stable { since_step: u64 },
+    Shrinking,
+    Finishing { since_step: u64 },
+}
+
 pub struct Simulation {
     nodes: BTreeMap<Name, Node>,
     network: Network,
@@ -62,6 +71,8 @@ pub struct Simulation {
     params: SimulationParams,
     /// Parameters for nodes.
     node_params: NodeParams,
+    /// Which phase the simulation is currently in.
+    phase: Phase,
     /// Collection of disconnected pairs which should be trying to reconnect.
     disconnected: BTreeSet<DisconnectedPair>,
     /// Generator of random events.
@@ -100,6 +111,7 @@ impl Simulation {
             network,
             params,
             node_params,
+            phase: Phase::Starting,
             disconnected: BTreeSet::new(),
             random_events,
             event_schedule,
@@ -115,7 +127,7 @@ impl Simulation {
     }
 
     fn apply_remove_node(&mut self, leaving_node: Name) {
-        info!("Node({}): dying...", leaving_node);
+        debug!("Node({}): dying...", leaving_node);
 
         // Remove the node.
         self.nodes.remove(&leaving_node);
@@ -151,9 +163,9 @@ impl Simulation {
             }
         }
 
-        info!("Node({}) and Node({}) disconnecting from each other...",
-              pair.lower(),
-              pair.higher());
+        debug!("Node({}) and Node({}) disconnecting from each other...",
+               pair.lower(),
+               pair.higher());
         let messages = vec![Message {
                                 sender: pair.lower(),
                                 recipient: pair.higher(),
@@ -178,10 +190,10 @@ impl Simulation {
             // Ensure both have realised they're disconnected.
             if self.nodes[&pair.lower()].is_disconnected_from(&pair.higher()) &&
                self.nodes[&pair.higher()].is_disconnected_from(&pair.lower()) &&
-               do_with_probability(self.params.prob_reconnect) {
-                info!("Node({}) and Node({}) reconnecting to each other...",
-                      pair.lower(),
-                      pair.higher());
+               do_with_probability(self.params.prob_reconnect(self.phase)) {
+                debug!("Node({}) and Node({}) reconnecting to each other...",
+                       pair.lower(),
+                       pair.higher());
                 messages.push(Message {
                                   sender: pair.lower(),
                                   recipient: pair.higher(),
@@ -203,7 +215,8 @@ impl Simulation {
     pub fn generate_events(&mut self, step: u64) {
         let mut events = vec![];
         events.extend(self.event_schedule.get_events(step));
-        events.extend(self.random_events.get_events(step, &self.nodes));
+        events.extend(self.random_events.get_events(self.phase, &self.nodes));
+        trace!("events: {:?}", events);
 
         let mut ev_messages = vec![];
 
@@ -217,44 +230,47 @@ impl Simulation {
         self.network.send(step, ev_messages);
 
         // Kill a connection between two nodes if we're past the stabilisation threshold.
-        if step >= self.params.drop_step && do_with_probability(self.params.prob_disconnect) {
+        if do_with_probability(self.params.prob_disconnect(self.phase)) {
             let disconnect_messages = self.disconnect_pair();
             self.network.send(step, disconnect_messages);
         }
 
-        // Try to reconnect any previously-disconnected pairs if we're past the stabilisation
-        // threshold. Exclude any which were disconnected in this step.
-        if step >= self.params.drop_step {
-            let reconnect_messages = self.reconnect_pairs();
-            self.network.send(step, reconnect_messages);
-        }
+        // Try to reconnect any previously-disconnected pairs.
+        let reconnect_messages = self.reconnect_pairs();
+        self.network.send(step, reconnect_messages);
     }
 
     /// Run the simulation, returning Ok iff the network was consistent upon termination.
     pub fn run(&mut self) -> Result<(), [u32; 4]> {
         let max_extra_steps = 1000;
-        // TODO: Use actual max value (probably from `NodeParams`) once the RmConv rule is added.
-        let max_timeout_steps = 60;
         let mut no_op_step_count = 0;
-        let mut ran_to_completion = false;
 
-        for step in 0..(self.params.num_steps + max_extra_steps) {
-            info!("-- step {} --", step);
-
-            // Generate events.
-            // We only generate events for at most `num_steps` steps, after which point
-            // we wait for the network to empty out.
-            if step < self.params.num_steps {
-                self.generate_events(step);
-            } else if self.network.queue_is_empty() {
-                if no_op_step_count > max_timeout_steps {
-                    ran_to_completion = true;
+        for step in 0.. {
+            // Generate events unless we're in the finishing phase, in which case we let the event
+            // queue empty out.
+            if let Phase::Finishing { since_step } = self.phase {
+                if step > since_step + max_extra_steps {
                     break;
-                } else {
-                    no_op_step_count += 1;
                 }
+                if self.network.queue_is_empty() {
+                    if no_op_step_count > self.node_params.join_timeout {
+                        break;
+                    } else {
+                        no_op_step_count += 1;
+                    }
+                } else {
+                    no_op_step_count = 0;
+                }
+                info!("-- step {} ({:?}) {} nodes --",
+                      step,
+                      self.phase,
+                      self.nodes.len());
             } else {
-                no_op_step_count = 0;
+                info!("-- step {} ({:?}) {} nodes --",
+                      step,
+                      self.phase,
+                      self.nodes.len());
+                self.generate_events(step);
             }
 
             let delivered = self.network.receive(step);
@@ -265,7 +281,7 @@ impl Simulation {
                         self.network.send(step, new_messages);
                     }
                     None => {
-                        info!("dropping message for dead node {}", message.recipient);
+                        debug!("dropping message for dead node {}", message.recipient);
                     }
                 }
             }
@@ -297,22 +313,71 @@ impl Simulation {
                     }
                     1 => (),
                     count if count <= self.params.max_conflicting_blocks => {
-                        info!("{}: has {} current blocks for own section.", node, count)
+                        debug!("{}: has {} current blocks for own section.", node, count)
                     }
                     count => panic!("{:?}\nhas {} current blocks for own section.", node, count),
                 }
             }
+
+            self.phase = self.phase_for_next_step(step);
         }
 
-        info!("-- final node states --");
+        debug!("-- final node states --");
         for node in self.nodes.values() {
-            info!("{:?}", node);
+            debug!("{:?}", node);
         }
 
-        assert!(ran_to_completion,
-                "there were undelivered messages at termination");
+        assert!(no_op_step_count > self.node_params.join_timeout,
+                "Votes were still being sent and received after {} extra steps during which no \
+                 churn was triggered.",
+                max_extra_steps);
 
         check_consistency(&self.nodes, self.node_params.min_section_size as usize)
             .map_err(|_| seed())
+    }
+
+    fn phase_for_next_step(&self, step: u64) -> Phase {
+        use self::Phase::*;
+
+        match self.phase {
+            Starting => {
+                if step >= self.params.start_random_events_step {
+                    if self.params.grow_prob_join > 0.0 {
+                        Growth
+                    } else {
+                        Stable { since_step: step + 1 }
+                    }
+                } else {
+                    Starting
+                }
+            }
+            Growth => {
+                if self.nodes.len() >= self.params.grow_complete {
+                    Stable { since_step: step + 1 }
+                } else {
+                    Growth
+                }
+            }
+            Stable { since_step } => {
+                if step >= since_step + self.params.stable_steps {
+                    if self.params.shrink_prob_drop > 0.0 {
+                        Shrinking
+                    } else {
+                        Finishing { since_step: step + 1 }
+                    }
+                } else {
+                    Stable { since_step }
+                }
+            }
+            Shrinking => {
+                // If the next node removal would take us below quorum, move to `Finishing`.
+                if (self.nodes.len() - 1) * 2 <= self.node_params.min_section_size {
+                    Finishing { since_step: step + 1 }
+                } else {
+                    Shrinking
+                }
+            }
+            Finishing { since_step } => Finishing { since_step },
+        }
     }
 }

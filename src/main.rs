@@ -8,26 +8,22 @@ fn main() {
     init_logging();
 
     let params = SimulationParams {
-        max_num_nodes: 30,
-        num_steps: 1150,
         max_delay: 5,
-        prob_join: 0.1,
-        prob_drop: 0.01,
-        drop_step: 150,
+        max_conflicting_blocks: 20,
+        grow_prob_join: 0.1,
+        grow_prob_drop: 0.02,
+        prob_churn: 0.05,
+        shrink_prob_join: 0.02,
+        shrink_prob_drop: 0.1,
         prob_disconnect: 0.05,
         // Gives ~95% chance that a pair will reconnect within 5 steps
         prob_reconnect: 0.45,
-        max_conflicting_blocks: 20,
+        start_random_events_step: 150,
+        grow_complete: 64,
+        stable_steps: 100,
     };
 
-    let node_params = NodeParams {
-        min_section_size: 8,
-        split_buffer: 1,
-        join_timeout: 20,
-        self_shutdown_timeout: 100,
-    };
-
-    let mut simulation = Simulation::new(params, node_params);
+    let mut simulation = Simulation::new(params, NodeParams::default());
 
     simulation.run().unwrap();
 }

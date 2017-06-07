@@ -11,68 +11,18 @@
 
 extern crate regex;
 extern crate clap;
-use regex::Regex;
+#[macro_use]
+extern crate lazy_static;
+
+mod utils;
+
 use clap::{App, Arg};
 use std::collections::{BTreeSet, BTreeMap};
-use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 use std::fs::File;
-use std::io::{BufReader, BufRead, Write, BufWriter};
-use std::fmt;
-
-fn hash<T: Hash>(t: &T) -> u64 {
-    let mut s = DefaultHasher::new();
-    t.hash(&mut s);
-    s.finish()
-}
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-struct Members(pub BTreeSet<String>);
-
-impl fmt::Display for Members {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (count, name) in self.0.iter().enumerate() {
-            write!(f, "<font color=\"#{}\">{}</font>, ", name, name)?;
-            if count % 3 == 0 {
-                write!(f, "<br/>")?;
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct Block {
-    pub prefix: String,
-    pub version: u64,
-    pub members: Members,
-}
-
-impl Block {
-    fn get_id(&self) -> String {
-        format!("prefix{}_v{}_{}",
-                self.prefix,
-                self.version,
-                hash(&self.members))
-    }
-
-    fn get_label(&self) -> String {
-        format!("<<font point-size=\"40\">p[{}] v{}</font><br/>Members: <br/>{}>",
-                self.prefix,
-                self.version,
-                self.members)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct Vote {
-    pub from: String,
-    pub to: String,
-}
+use std::io::{Write, BufWriter};
+use utils::log_parse::{LogData, LogIterator};
 
 fn main() {
-    let agreement_re = Regex::new(r"^Node\((?P<node>[0-9a-f]{6}\.\.)\): received agreement for Vote \{ from: Block \{ prefix: Prefix\((?P<pfrom>[01]*)\), version: (?P<vfrom>\d+), members: \{(?P<mfrom>[0-9a-f]{6}\.\.(, [0-9a-f]{6}\.\.)*)\} \}, to: Block \{ prefix: Prefix\((?P<pto>[01]*)\), version: (?P<vto>\d+), members: \{(?P<mto>[0-9a-f]{6}\.\.(, [0-9a-f]{6}\.\.)*)\} \} \}").unwrap();
-
     let matches = App::new("ewok_graph")
         .about("This tool takes a log output from an Ewok simulation and generates a file \
                describing a graph of blocks in the DOT language. The resulting file can then be \
@@ -93,36 +43,15 @@ fn main() {
     let mut votes = BTreeSet::new();
 
     let file = File::open(input).unwrap();
-    let mut reader = BufReader::new(file);
-    let mut line = String::new();
+    let log_iter = LogIterator::new(file);
 
     println!("Reading log...");
-    while reader.read_line(&mut line).unwrap() > 0 {
-        if let Some(caps) = agreement_re.captures(&line) {
-            let block_from = Block {
-                prefix: caps["pfrom"].to_owned(),
-                version: caps["vfrom"].parse().expect("invalid version number"),
-                members: Members(caps["mfrom"]
-                                     .split(", ")
-                                     .map(|s| s.to_owned())
-                                     .collect()),
-            };
-            let block_to = Block {
-                prefix: caps["pto"].to_owned(),
-                version: caps["vto"].parse().expect("invalid version number"),
-                members: Members(caps["mto"].split(", ").map(|s| s.to_owned()).collect()),
-            };
-            let from_id = block_from.get_id();
-            let to_id = block_to.get_id();
-            blocks.insert(from_id.clone(), block_from);
-            blocks.insert(to_id.clone(), block_to);
-            let vote = Vote {
-                from: from_id,
-                to: to_id,
-            };
+    for data in log_iter {
+        if let LogData::VoteAgreement(vote, block_from, block_to) = data {
+            blocks.insert(block_from.get_id(), block_from);
+            blocks.insert(block_to.get_id(), block_to);
             votes.insert(vote);
         }
-        line.clear();
     }
 
     println!("Reading finished. Outputting the dot file...");

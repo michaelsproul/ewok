@@ -116,4 +116,13 @@ impl Network {
             .flat_map(BTreeMap::values)
             .all(Vec::is_empty)
     }
+
+    /// Get the number of messages still in queue
+    pub fn messages_in_queue(&self) -> usize {
+        self.messages
+            .values()
+            .flat_map(BTreeMap::values)
+            .map(Vec::len)
+            .sum()
+    }
 }

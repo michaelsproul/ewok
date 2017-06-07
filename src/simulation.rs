@@ -320,6 +320,9 @@ impl Simulation {
             }
 
             self.phase = self.phase_for_next_step(step);
+
+            debug!("- {} messages still in queue. -",
+                   self.network.messages_in_queue());
         }
 
         debug!("-- final node states --");

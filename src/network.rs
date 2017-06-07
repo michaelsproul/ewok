@@ -100,12 +100,18 @@ impl Network {
 
     /// Send messages at the given step.
     pub fn send(&mut self, step: u64, messages: Vec<Message>) {
+        let mut msg_counts = BTreeMap::new();
         for message in messages {
+            let count = msg_counts.entry(message.sender).or_insert(0);
+            *count += 1;
             let conn_messages = self.messages
                 .entry((message.sender, message.recipient))
                 .or_insert_with(BTreeMap::new);
             let step_messages = conn_messages.entry(step).or_insert_with(Vec::new);
             step_messages.push(message);
+        }
+        for (name, count) in msg_counts {
+            trace!("Network: sent {} messages from {}", count, name);
         }
     }
 

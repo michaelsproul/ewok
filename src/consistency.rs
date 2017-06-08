@@ -32,6 +32,14 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>, min_section_size: usize) 
                 failed = true;
                 error!("section too small: {:?} with members {:?}", prefix, members);
             }
+
+            // Check that all members are alive.
+            for member in members {
+                if !nodes.contains_key(member) {
+                    failed = true;
+                    error!("node {:?} is dead but appears in the block for {:?}", member, prefix);
+                }
+            }
         }
     }
 

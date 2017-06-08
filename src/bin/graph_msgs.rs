@@ -17,7 +17,7 @@ extern crate lazy_static;
 mod utils;
 
 use clap::{App, Arg};
-use std::collections::BTreeMap;
+use std::collections::{BTreeSet, BTreeMap};
 use std::fs::File;
 use std::io::{Write, BufWriter};
 use std::mem;
@@ -45,6 +45,12 @@ fn main() {
                  .long("output")
                  .value_name("FILE")
                  .help("The name for the output file."))
+        .arg(Arg::with_name("per_node")
+                 .short("n")
+                 .long("node")
+                 .takes_value(false)
+                 .help("If set, the messages sent are being calculated per node and the columns \
+                     in the output file correspond to single nodes."))
         .arg(Arg::with_name("INPUT")
                  .help("Sets the input file to use")
                  .required(true)
@@ -52,8 +58,10 @@ fn main() {
         .get_matches();
     let input = matches.value_of("INPUT").unwrap();
     let output = matches.value_of("output").unwrap_or("output.dot");
+    let per_node = matches.is_present("per_node");
     //let mut blocks = BTreeSet::new();
     let mut sent_msgs = BTreeMap::new();
+    let mut node_names = BTreeSet::new();
     let mut result = Vec::new();
     let mut msgs_in_queue = 0;
 
@@ -68,6 +76,7 @@ fn main() {
                 blocks.insert(block_to);
             }*/
             LogData::SentMsgs(name, sent) => {
+                node_names.insert(name.clone());
                 let count = sent_msgs.entry(name).or_insert(0);
                 *count += sent;
             }
@@ -92,12 +101,16 @@ fn main() {
     let mut writer = BufWriter::new(file);
 
     for (i, data) in result.into_iter().enumerate() {
-        let msgs_sent: u64 = data.msgs_sent.iter().map(|(_, &v)| v).sum();
-        let _ = write!(writer,
-                       "{}\t{}\t{}\t{}\n",
-                       i,
-                       data.network_size,
-                       msgs_sent,
-                       data.msgs_queue);
+        let _ = write!(writer, "{}\t{}\t{}", i, data.network_size, data.msgs_queue);
+        if per_node {
+            for n in &node_names {
+                let sent = *data.msgs_sent.get(n).unwrap_or(&0);
+                let _ = write!(writer, "\t{}", sent);
+            }
+            let _ = write!(writer, "\n");
+        } else {
+            let msgs_sent: u64 = data.msgs_sent.iter().map(|(_, &v)| v).sum();
+            let _ = write!(writer, "\t{}\n", msgs_sent);
+        }
     }
 }

@@ -23,5 +23,10 @@ name = "graph"
 path = "src/bin/graph.rs"
 doc = false
 
+[[bin]]
+name = "graph_msgs"
+path = "src/bin/graph_msgs.rs"
+doc = false
+
 [profile.release]
 debug = true

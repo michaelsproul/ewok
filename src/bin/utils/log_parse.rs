@@ -6,14 +6,14 @@ use std::io::{BufReader, BufRead};
 
 lazy_static!{
     static ref AGREEMENT_RE: Regex = Regex::new(r"^Node\((?P<node>[0-9a-f]{6}\.\.)\): received agreement for Vote \{ from: Block \{ prefix: Prefix\((?P<pfrom>[01]*)\), version: (?P<vfrom>\d+), members: \{(?P<mfrom>[0-9a-f]{6}\.\.(, [0-9a-f]{6}\.\.)*)\} \}, to: Block \{ prefix: Prefix\((?P<pto>[01]*)\), version: (?P<vto>\d+), members: \{(?P<mto>[0-9a-f]{6}\.\.(, [0-9a-f]{6}\.\.)*)\} \} \}").unwrap();
-    static ref STEP_RE: Regex = Regex::new(r"^-- step (?P<step>\d+)").unwrap();
+    static ref STEP_RE: Regex = Regex::new(r"^-- step (?P<step>\d+) \(.+\) (?P<nodes>\d+) nodes --").unwrap();
     static ref SENT_RE: Regex = Regex::new(r"^Network: sent (?P<sent>\d+) messages from (?P<name>[0-9a-f]{6})\.\.").unwrap();
     static ref QUEUE_RE: Regex = Regex::new(r"^- (?P<count>\d+) messages still in queue").unwrap();
 }
 
 pub enum LogData {
     VoteAgreement(Vote, Block, Block),
-    Step(u64),
+    Step(u64, u64),
     SentMsgs(String, u64),
     MsgsInQueue(u64),
 }
@@ -44,7 +44,8 @@ impl LogData {
             Some(LogData::VoteAgreement(vote, block_from, block_to))
         } else if let Some(caps) = STEP_RE.captures(line) {
             let step_num = caps["step"].parse().expect("invalid step number");
-            Some(LogData::Step(step_num))
+            let nodes = caps["nodes"].parse().expect("invalid number of nodes");
+            Some(LogData::Step(step_num, nodes))
         } else if let Some(caps) = SENT_RE.captures(line) {
             let sent = caps["sent"].parse().expect("invalid message count");
             let name = caps["name"].to_owned();

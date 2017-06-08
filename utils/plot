@@ -1,5 +1,0 @@
-#!/bin/bash
-
-# Usage: plot graph_data_file
-
-gnuplot -e "set terminal png size 1920,1080; set output 'output.png'; set style data lines; set xlabel 'Step'; plot '$1' u 1:2 title 'Nodes' lt rgb '#8000FF', '$1' u 1:(\$3/100) title 'Queue size / 100' lt rgb '#FF0000', '$1' u 1:(\$4/100) title 'Messages sent / 100' lt rgb '#00FF00'"

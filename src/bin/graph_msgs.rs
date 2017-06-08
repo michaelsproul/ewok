@@ -32,19 +32,38 @@ fn main() {
             file can then be used to create graphs of the number of messages sent, messages \
             in queue and valid blocks for prefix for the latest version over time.\n\n\
             Output file row format:\n\n\
-            step_number network_size messages_in_queue messages_sent\n\n\
-            messages_sent can be one column or multiple columns in the per-node mode.")
+            step_number [network_size] [queue_size] [total_messages_sent] [avg_messages_sent] \
+            [max_messages_sent_per_node]")
         .arg(Arg::with_name("output")
                  .short("o")
                  .long("output")
                  .value_name("FILE")
                  .help("The name for the output file."))
-        .arg(Arg::with_name("per_node")
+        .arg(Arg::with_name("include_network_size")
                  .short("n")
-                 .long("node")
+                 .long("network-size")
                  .takes_value(false)
-                 .help("If set, the messages sent are being calculated per node and the columns \
-                     in the output file correspond to single nodes."))
+                 .help("Include the network size in the output"))
+        .arg(Arg::with_name("include_queue_size")
+                 .short("q")
+                 .long("queue-size")
+                 .takes_value(false)
+                 .help("Include the queue size in the output"))
+        .arg(Arg::with_name("include_total_sent")
+                 .short("t")
+                 .long("total-sent")
+                 .takes_value(false)
+                 .help("Include the total number of messages sent in the output"))
+        .arg(Arg::with_name("include_avg_sent")
+                 .short("a")
+                 .long("average-sent")
+                 .takes_value(false)
+                 .help("Include the average number of messages sent per node in the output"))
+        .arg(Arg::with_name("include_max_sent")
+                 .short("m")
+                 .long("max-sent")
+                 .takes_value(false)
+                 .help("Include the maximum number of messages sent per node in the output"))
         .arg(Arg::with_name("INPUT")
                  .help("Sets the input file to use")
                  .required(true)
@@ -52,7 +71,11 @@ fn main() {
         .get_matches();
     let input = matches.value_of("INPUT").unwrap();
     let output = matches.value_of("output").unwrap_or("output.dot");
-    let per_node = matches.is_present("per_node");
+    let network_size = matches.is_present("include_network_size");
+    let queue_size = matches.is_present("include_queue_size");
+    let total_sent = matches.is_present("include_total_sent");
+    let avg_sent = matches.is_present("include_avg_sent");
+    let max_sent = matches.is_present("include_max_sent");
     //let mut blocks = BTreeSet::new();
     let mut sent_msgs = BTreeMap::new();
     let mut node_names = BTreeSet::new();
@@ -95,16 +118,36 @@ fn main() {
     let mut writer = BufWriter::new(file);
 
     for (i, data) in result.into_iter().enumerate() {
-        let _ = write!(writer, "{}\t{}\t{}", i, data.network_size, data.msgs_queue);
-        if per_node {
-            for n in &node_names {
-                let sent = *data.msgs_sent.get(n).unwrap_or(&0);
-                let _ = write!(writer, "\t{}", sent);
-            }
-            let _ = write!(writer, "\n");
-        } else {
-            let msgs_sent: u64 = data.msgs_sent.iter().map(|(_, &v)| v).sum();
-            let _ = write!(writer, "\t{}\n", msgs_sent);
+        write!(writer, "{}", i).unwrap();
+        if network_size {
+            write!(writer, "\t{}", data.network_size).unwrap();
         }
+        if queue_size {
+            write!(writer, "\t{}", data.msgs_queue).unwrap();
+        }
+        if total_sent {
+            write!(writer,
+                   "\t{}",
+                   data.msgs_sent.iter().map(|(_, n)| *n).sum::<u64>())
+                    .unwrap();
+        }
+        if avg_sent {
+            write!(writer,
+                   "\t{}",
+                   data.msgs_sent.iter().map(|(_, n)| *n).sum::<u64>() as f64 /
+                   data.network_size as f64)
+                    .unwrap();
+        }
+        if max_sent {
+            write!(writer,
+                   "\t{}",
+                   data.msgs_sent
+                       .iter()
+                       .map(|(_, n)| *n)
+                       .max()
+                       .unwrap_or(0))
+                    .unwrap();
+        }
+        write!(writer, "\n").unwrap();
     }
 }

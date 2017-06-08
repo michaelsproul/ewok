@@ -5,9 +5,6 @@ use simulation::Phase::*;
 pub struct SimulationParams {
     /// Maximum number of steps a message can be delayed by before it's delivered.
     pub max_delay: u64,
-    /// The maximum number of permissible current blocks for a single section. Exceeding this will
-    /// cause the process to panic.
-    pub max_conflicting_blocks: usize,
     /// Probability of a node joining on a given step during the network growth phase.
     pub grow_prob_join: f64,
     /// Probability of a node leaving on a given step during the network growth phase.
@@ -22,8 +19,8 @@ pub struct SimulationParams {
     pub prob_disconnect: f64,
     /// Probability that a lost two-way connection will be re-established on any given step.
     pub prob_reconnect: f64,
-    /// Step at which to start allowing random events (gives the network time to start up).
-    pub start_random_events_step: u64,
+    /// Network starting phase is complete once the size of network reaches this value.
+    pub starting_complete: usize,
     /// Network growth phase is complete once the size of network reaches this value.
     pub grow_complete: usize,
     /// Network stable phase is run for this number of steps.
@@ -75,6 +72,9 @@ pub struct NodeParams {
     pub join_timeout: u64,
     /// Number of steps to wait before shutting down if we fail to join.
     pub self_shutdown_timeout: u64,
+    /// The maximum number of permissible valid blocks for a single prefix and version pair.
+    /// Exceeding this will cause the process to panic.
+    pub max_conflicting_blocks: usize,
 }
 
 impl Default for NodeParams {
@@ -84,6 +84,7 @@ impl Default for NodeParams {
             split_buffer: 1,
             join_timeout: 20,
             self_shutdown_timeout: 100,
+            max_conflicting_blocks: 20,
         }
     }
 }

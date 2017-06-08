@@ -15,7 +15,6 @@ use ewok::random::random;
 fn default_params() -> SimulationParams {
     SimulationParams {
         max_delay: 5,
-        max_conflicting_blocks: 20,
         grow_prob_join: 0.0,
         grow_prob_drop: 0.0,
         prob_churn: 0.0,
@@ -23,7 +22,7 @@ fn default_params() -> SimulationParams {
         shrink_prob_drop: 0.0,
         prob_disconnect: 0.0,
         prob_reconnect: 0.0,
-        start_random_events_step: 0,
+        starting_complete: 0,
         grow_complete: 0,
         stable_steps: 1000,
     }

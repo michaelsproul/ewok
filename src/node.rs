@@ -179,6 +179,24 @@ impl Node {
             .collect()
     }
 
+    /// Check we don't have excessive valid blocks for any given (prefix, version) pair.
+    pub fn check_conflicting_block_count(&self) {
+        let mut conflicting_counts = BTreeMap::new();
+        for block in &self.valid_blocks {
+            let count = conflicting_counts
+                .entry((block.prefix, block.version))
+                .or_insert(0);
+            *count += 1;
+            if *count == self.params.max_conflicting_blocks {
+                panic!("{:?}\nhas {} valid blocks for {:?} with version {}.",
+                       self,
+                       count,
+                       block.prefix,
+                       block.version);
+            }
+        }
+    }
+
     /// Blocks that we can legitimately vote on successors for, because we are part of them.
     pub fn our_current_blocks<'a>(&'a self) -> Box<Iterator<Item = &'a Block> + 'a> {
         our_blocks(&self.current_blocks, self.our_name)

@@ -3,14 +3,14 @@ use name::Name;
 
 use std::collections::BTreeSet;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Message {
     pub sender: Name,
     pub recipient: Name,
     pub content: MessageContent,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MessageContent {
     /// Vote for a block to succeed another block.
     VoteMsg(Vote),

@@ -103,7 +103,7 @@ impl Simulation {
                     -> Self {
         let (nodes, genesis_set) = generate_network(&sections, &node_params);
         let network = Network::new(params.max_delay);
-        let random_events = RandomEvents::new(params.clone(), node_params.clone());
+        let random_events = RandomEvents::new(params.clone());
 
         Simulation {
             nodes,

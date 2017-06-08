@@ -37,7 +37,9 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>, min_section_size: usize) 
             for member in members {
                 if !nodes.contains_key(member) {
                     failed = true;
-                    error!("node {:?} is dead but appears in the block for {:?}", member, prefix);
+                    error!("node {:?} is dead but appears in the block for {:?}",
+                           member,
+                           prefix);
                 }
             }
         }

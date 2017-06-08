@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use itertools::Itertools;
-use params::{NodeParams, SimulationParams};
+use params::SimulationParams;
 use name::Name;
 use node::Node;
 use event::Event;
@@ -9,15 +9,11 @@ use simulation::Phase;
 
 pub struct RandomEvents {
     params: SimulationParams,
-    node_params: NodeParams,
 }
 
 impl RandomEvents {
-    pub fn new(params: SimulationParams, node_params: NodeParams) -> Self {
-        RandomEvents {
-            params,
-            node_params,
-        }
+    pub fn new(params: SimulationParams) -> Self {
+        RandomEvents { params }
     }
 
     pub fn get_events(&self, phase: Phase, nodes: &BTreeMap<Name, Node>) -> Vec<Event> {
@@ -59,7 +55,7 @@ impl RandomEvents {
                     .members
                     .intersection(&names_sorted)
                     .count();
-                if (section_size - 1) * 2 > self.node_params.min_section_size {
+                if (section_size - 1) * 2 > our_current_block.members.len() {
                     return Some(name);
                 }
             }

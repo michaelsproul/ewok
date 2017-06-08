@@ -1,12 +1,3 @@
-//! Recommended usage:
-//!
-//! graph ewok_log_file -o output_file
-//! dot -Tsvg -O output_file
-//!
-//! (The resulting images are large, so the SVG format is recommended for
-//! quality-conserving zooming.)
-//! The 'dot' utility can be found in the 'graphviz' package.
-
 #![cfg_attr(feature="cargo-clippy", allow(doc_markdown))]
 
 extern crate regex;
@@ -39,7 +30,10 @@ fn main() {
         .about("This tool takes a log output from an Ewok simulation and generates a file \
             containing a description of evolution of the chain and the message queue. This \
             file can then be used to create graphs of the number of messages sent, messages \
-            in queue and valid blocks for prefix for the latest version over time.")
+            in queue and valid blocks for prefix for the latest version over time.\n\n\
+            Output file row format:\n\n\
+            step_number network_size messages_in_queue messages_sent\n\n\
+            messages_sent can be one column or multiple columns in the per-node mode.")
         .arg(Arg::with_name("output")
                  .short("o")
                  .long("output")

@@ -19,12 +19,7 @@ struct StepData {
     pub msgs_sent: BTreeMap<String, u64>,
     pub msgs_queue: u64,
     pub network_size: u64,
-//    pub blocks_per_prefix: BTreeMap<String, u64>,
 }
-
-/*fn calculate_blocks_per_prefix(blocks: &BTreeSet<Block>) -> BTreeMap<String, u64> {
-    BTreeMap::new()
-}*/
 
 fn gnuplot_command(input: &str,
                    output: &str,
@@ -130,7 +125,6 @@ fn main() {
     let avg_sent = matches.is_present("include_avg_sent");
     let max_sent = matches.is_present("include_max_sent");
     let plot = matches.value_of("plot");
-    //let mut blocks = BTreeSet::new();
     let mut sent_msgs = BTreeMap::new();
     let mut node_names = BTreeSet::new();
     let mut result = Vec::new();
@@ -142,10 +136,6 @@ fn main() {
     println!("Reading log...");
     for data in log_iter {
         match data {
-            /*LogData::VoteAgreement(_, block_from, block_to) => {
-                blocks.insert(block_from);
-                blocks.insert(block_to);
-            }*/
             LogData::SentMsgs(name, sent) => {
                 node_names.insert(name.clone());
                 let count = sent_msgs.entry(name).or_insert(0);
@@ -159,7 +149,6 @@ fn main() {
                     msgs_sent: mem::replace(&mut sent_msgs, BTreeMap::new()),
                     msgs_queue: msgs_in_queue,
                     network_size: n,
-                    //blocks_per_prefix: calculate_blocks_per_prefix(&blocks),
                 };
                 result.push(data);
             }

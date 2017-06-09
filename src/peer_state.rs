@@ -26,6 +26,16 @@ enum PeerState {
     },
 }
 
+impl PeerState {
+    fn is_unconfirmed(&self) -> bool {
+        if let Unconfirmed { .. } = *self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PeerStates {
     /// States of known peers.
@@ -45,6 +55,15 @@ impl PeerStates {
     /// Names of all known peers.
     pub fn all_peers<'a>(&'a self) -> Box<Iterator<Item = &'a Name> + 'a> {
         Box::new(self.states.keys())
+    }
+
+    /// Names of all known candidates.
+    pub fn candidates(&self) -> BTreeSet<Name> {
+        self.states
+            .iter()
+            .filter(|&(_, state)| state.is_unconfirmed())
+            .map(|(name, _)| *name)
+            .collect()
     }
 
     /// Called when we see a NodeJoined message.

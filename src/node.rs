@@ -28,6 +28,9 @@ pub struct Node {
     pub current_blocks: CurrentBlocks,
     /// Map from blocks to voters for that block.
     pub vote_counts: VoteCounts,
+    /// Recently received votes that haven't yet been applied to the sets of valid and current
+    /// blocks.
+    pub recent_votes: BTreeSet<Vote>,
     /// States for peers.
     pub peer_states: PeerStates,
     /// Filter for hashes of recent messages we've already sent and shouldn't resend.
@@ -67,6 +70,7 @@ impl Node {
             current_blocks: current_blocks.clone(),
             current_candidate_blocks: current_blocks,
             vote_counts: BTreeMap::new(),
+            recent_votes: BTreeSet::new(),
             peer_states: PeerStates::new(params.clone()),
             message_filter: VecDeque::with_capacity(MESSAGE_FILTER_LEN),
             params,
@@ -85,9 +89,10 @@ impl Node {
     }
 
     /// Insert a vote into our local cache of votes.
-    fn add_vote_to_cache<I>(&mut self, vote: Vote, voted_for: I)
+    fn add_vote<I>(&mut self, vote: Vote, voted_for: I)
         where I: IntoIterator<Item = Name>
     {
+        self.recent_votes.insert(vote.clone());
         let voters = self.vote_counts
             .entry(vote.from)
             .or_insert_with(BTreeMap::new)
@@ -96,10 +101,12 @@ impl Node {
         voters.extend(voted_for);
     }
 
-    /// Update valid and current block sets, return set of newly valid blocks to broadcast.
-    fn update_valid_blocks(&mut self, vote: &Vote) -> Vec<(Vote, BTreeSet<Name>)> {
+    /// Update valid and current block sets, return set of newly valid blocks to broadcast,
+    /// and merge messages to broadcast.
+    fn update_valid_blocks(&mut self) -> Vec<(Vote, BTreeSet<Name>)> {
         // Update valid blocks.
-        let new_valid_votes = new_valid_blocks(&self.valid_blocks, &self.vote_counts, vote);
+        let new_votes = mem::replace(&mut self.recent_votes, btreeset!{});
+        let new_valid_votes = new_valid_blocks(&self.valid_blocks, &self.vote_counts, new_votes);
         self.valid_blocks
             .extend(new_valid_votes
                         .iter()
@@ -139,15 +146,10 @@ impl Node {
         }
     }
 
-    /// Add a block to our local cache, and update our current and valid blocks.
-    pub fn add_vote<I>(&mut self, vote: Vote, voted_for: I) -> Vec<Message>
-        where I: IntoIterator<Item = Name>
-    {
-        // Add vote to cache.
-        self.add_vote_to_cache(vote.clone(), voted_for);
-
+    /// Called once per step.
+    pub fn update_state(&mut self) -> Vec<Message> {
         // Update valid and current blocks.
-        let new_valid_votes = self.update_valid_blocks(&vote);
+        let new_valid_votes = self.update_valid_blocks();
 
         let vote_agreed_msgs = new_valid_votes.into_iter().map(VoteAgreedMsg).collect();
         self.broadcast(vote_agreed_msgs)
@@ -275,8 +277,7 @@ impl Node {
         let mut to_broadcast = vec![];
 
         for vote in &votes {
-            let agreed_msgs = self.add_vote(vote.clone(), Some(our_name));
-            to_broadcast.extend(agreed_msgs);
+            self.add_vote(vote.clone(), Some(our_name));
         }
 
         // Construct vote messages and broadcast.
@@ -316,19 +317,16 @@ impl Node {
     }
 
     /// Apply a bootstrap message received from another node.
-    fn apply_bootstrap_msg(&mut self, vote_counts: VoteCounts) -> Vec<Message> {
-        let mut to_send = vec![];
+    fn apply_bootstrap_msg(&mut self, vote_counts: VoteCounts) {
         for (from, map) in vote_counts {
             for (to, voters) in map {
                 let vote = Vote {
                     from: from.clone(),
                     to,
                 };
-                let our_votes = self.add_vote(vote, voters);
-                to_send.extend(our_votes);
+                self.add_vote(vote, voters);
             }
         }
-        to_send
     }
 
     /// Returns true if the peer is known and its state is `Disconnected`.
@@ -361,20 +359,23 @@ impl Node {
             }
             VoteMsg(vote) => {
                 debug!("{}: received {:?} from {}", self, vote, message.sender);
-                self.add_vote(vote, Some(message.sender))
+                self.add_vote(vote, Some(message.sender));
+                vec![]
             }
             VoteAgreedMsg((vote, voters)) => {
                 debug!("{}: received agreement for {:?} from {}",
                        self,
                        vote,
                        message.sender);
-                self.add_vote(vote, voters)
+                self.add_vote(vote, voters);
+                vec![]
             }
             BootstrapMsg(vote_counts) => {
                 debug!("{}: applying bootstrap message from {}",
                        self,
                        message.sender);
-                self.apply_bootstrap_msg(vote_counts)
+                self.apply_bootstrap_msg(vote_counts);
+                vec![]
             }
             ConnectionLost => {
                 debug!("{}: lost our connection to {}", self, message.sender);

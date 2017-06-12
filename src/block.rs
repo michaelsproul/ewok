@@ -38,6 +38,15 @@ pub type CurrentBlocks = BTreeSet<Block>;
 /// Mapping from votes to voters: (vote.from -> (vote.to -> names)).
 pub type VoteCounts = BTreeMap<Block, BTreeMap<Block, BTreeSet<Name>>>;
 
+#[cfg(feature = "fast")]
+fn abs_diff(x: usize, y: usize) -> usize {
+    if x >= y {
+        x - y
+    } else {
+        y - x
+    }
+}
+
 impl Block {
     /// Create a genesis block.
     pub fn genesis(name: Name) -> Self {
@@ -70,8 +79,14 @@ impl Block {
         }
     }
 
+
     /// Is this block admissible after the given other block?
-    pub fn is_admissible_after(&self, other: &Block) -> bool {
+    ///
+    /// We have 2 versions of this function: a real BFT one and a fast one that's only
+    /// safe in the simulation.
+    #[cfg(not(feature = "fast"))]
+    fn is_admissible_after(&self, other: &Block) -> bool {
+        // This is the proper BFT version of `is_admissible_after`.
         if self.version <= other.version {
             return false;
         }
@@ -100,6 +115,30 @@ impl Block {
             false
         }
     }
+
+    #[cfg(feature = "fast")]
+    fn is_admissible_after(&self, other: &Block) -> bool {
+        // This is an approximate version of `is_admissible_after` that is sufficient
+        // for the simulation (because nobody votes invalidly), and is much faster.
+        if self.version <= other.version {
+            return false;
+        }
+
+        // Add/remove case.
+        if self.prefix == other.prefix {
+            abs_diff(self.members.len(), other.members.len()) == 1
+        }
+        // Split case.
+        else if self.prefix.popped() == other.prefix {
+            true
+        }
+        // Merge case
+        else if other.prefix.popped() == self.prefix {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 /// Compute the set of blocks that become valid as a result of adding `new_vote`.
@@ -113,7 +152,7 @@ impl Block {
 /// votes are the new valid blocks that should be added to `valid_blocks`.
 pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
                         vote_counts: &VoteCounts,
-                        new_vote: &Vote)
+                        new_votes: BTreeSet<Vote>)
                         -> Vec<(Vote, BTreeSet<Name>)> {
     // Set of valid blocks to branch out from.
     // Stored as a set of votes where the frontier blocks are the "to" component,
@@ -123,17 +162,17 @@ pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
     // Set of votes for new valid blocks.
     let mut new_valid_votes = vec![];
 
-    // If the new vote extends an existing valid block, we need to add it to the frontier set
+    // If a new vote extends an existing valid block, we need to add it to the frontier set
     // so we can branch out from it.
-    if valid_blocks.contains(&new_vote.from) {
-        // This dummy vote is a bit of hack, we really just need init_vote.to = new_vote.from.
-        let init_vote = Vote {
-            from: new_vote.from.clone(),
-            to: new_vote.from.clone(),
-        };
-        frontier.insert((init_vote, BTreeSet::new()));
-    } else {
-        return new_valid_votes;
+    for new_vote in new_votes {
+        if valid_blocks.contains(&new_vote.from) {
+            // This dummy vote is a bit of hack, we really just need init_vote.to = new_vote.from.
+            let init_vote = Vote {
+                from: new_vote.to,
+                to: new_vote.from,
+            };
+            frontier.insert((init_vote, BTreeSet::new()));
+        }
     }
 
     while !frontier.is_empty() {
@@ -216,7 +255,11 @@ pub fn compute_current_blocks(candidate_blocks: &BTreeSet<Block>) -> CurrentBloc
 
 /// Return true if `voters` form a quorum of `members`.
 pub fn is_quorum_of(voters: &BTreeSet<Name>, members: &BTreeSet<Name>) -> bool {
+    #[cfg(not(feature = "fast"))]
     let valid_voters = voters & members;
+    #[cfg(feature = "fast")]
+    let valid_voters = voters;
+
     assert_eq!(voters.len(), valid_voters.len());
     valid_voters.len() * 2 > members.len()
 }

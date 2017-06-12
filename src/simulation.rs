@@ -300,17 +300,12 @@ impl Simulation {
                 self.network.send(step, removal_msgs);
             }
 
-            // Send pending votes independently of churn events
+            // Update node state (current blocks), and send new votes.
             for node in self.nodes.values_mut() {
+                self.network.send(step, node.update_state());
                 self.network.send(step, node.broadcast_new_votes(step));
                 match node.our_current_blocks().count() {
-                    0 => {
-                        if step > node.step_created() + self.node_params.self_shutdown_timeout {
-                            // The node should have joined by now and received the votes showing it
-                            // existing in at least one current block.
-                            panic!("{:?}\ndoesn't have any current blocks", node)
-                        }
-                    }
+                    0 => (),
                     1 => node.check_conflicting_block_count(),
                     count => panic!("{:?}\nhas {} current blocks for own section.", node, count),
                 }

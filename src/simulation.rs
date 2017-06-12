@@ -287,6 +287,7 @@ impl Simulation {
             }
 
             // Shutdown nodes that have failed to join.
+            // Update node state (current and valid block sets).
             let mut to_shutdown = BTreeSet::new();
             for (name, node) in &self.nodes {
                 if node.should_shutdown(step) {
@@ -302,6 +303,7 @@ impl Simulation {
 
             // Send pending votes independently of churn events
             for node in self.nodes.values_mut() {
+                self.network.send(step, node.update_state());
                 self.network.send(step, node.broadcast_new_votes(step));
                 match node.our_current_blocks().count() {
                     0 => {

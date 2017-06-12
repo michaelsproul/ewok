@@ -78,24 +78,37 @@ impl Block {
 
         // Add/remove case.
         if self.prefix == other.prefix {
+            /*
             self.members
                 .symmetric_difference(&other.members)
                 .count() == 1
+            */
+            if self.members.len() >= other.members.len() {
+                self.members.len() - other.members.len() == 1
+            } else {
+                other.members.len() - self.members.len() == 1
+            }
         }
         // Split case.
         else if self.prefix.popped() == other.prefix {
+            /*
             let filtered = other
                 .members
                 .iter()
                 .filter(|name| self.prefix.matches(**name));
             self.members.iter().eq(filtered)
+            */
+            true
         }
         // Merge case
         else if other.prefix.popped() == self.prefix {
+            /*
             let filtered = self.members
                 .iter()
                 .filter(|name| other.prefix.matches(**name));
             other.members.iter().eq(filtered)
+            */
+            true
         } else {
             false
         }
@@ -113,7 +126,7 @@ impl Block {
 /// votes are the new valid blocks that should be added to `valid_blocks`.
 pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
                         vote_counts: &VoteCounts,
-                        new_vote: &Vote)
+                        new_votes: BTreeSet<Vote>)
                         -> Vec<(Vote, BTreeSet<Name>)> {
     // Set of valid blocks to branch out from.
     // Stored as a set of votes where the frontier blocks are the "to" component,
@@ -123,17 +136,18 @@ pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
     // Set of votes for new valid blocks.
     let mut new_valid_votes = vec![];
 
+    // FIXME(michael): clean this up.
     // If the new vote extends an existing valid block, we need to add it to the frontier set
     // so we can branch out from it.
-    if valid_blocks.contains(&new_vote.from) {
-        // This dummy vote is a bit of hack, we really just need init_vote.to = new_vote.from.
-        let init_vote = Vote {
-            from: new_vote.from.clone(),
-            to: new_vote.from.clone(),
-        };
-        frontier.insert((init_vote, BTreeSet::new()));
-    } else {
-        return new_valid_votes;
+    for new_vote in new_votes {
+        if valid_blocks.contains(&new_vote.from) {
+            // This dummy vote is a bit of hack, we really just need init_vote.to = new_vote.from.
+            let init_vote = Vote {
+                from: new_vote.to,
+                to: new_vote.from,
+            };
+            frontier.insert((init_vote, BTreeSet::new()));
+        }
     }
 
     while !frontier.is_empty() {
@@ -216,9 +230,9 @@ pub fn compute_current_blocks(candidate_blocks: &BTreeSet<Block>) -> CurrentBloc
 
 /// Return true if `voters` form a quorum of `members`.
 pub fn is_quorum_of(voters: &BTreeSet<Name>, members: &BTreeSet<Name>) -> bool {
-    let valid_voters = voters & members;
-    assert_eq!(voters.len(), valid_voters.len());
-    valid_voters.len() * 2 > members.len()
+    //let valid_voters = voters & members;
+    //assert_eq!(voters.len(), valid_voters.len());
+    voters.len() * 2 > members.len()
 }
 
 /// Blocks that we can legitimately vote on successors for, because we are part of them.

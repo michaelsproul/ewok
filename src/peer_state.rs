@@ -1,5 +1,6 @@
 use name::Name;
 use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 use std::mem;
 use params::NodeParams;
 use block::Block;
@@ -181,7 +182,7 @@ impl PeerStates {
 }
 
 /// Compute the set of nodes that are in all the given blocks.
-pub fn nodes_in_all(blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
+pub fn nodes_in_all(blocks: &BTreeSet<Rc<Block>>) -> BTreeSet<Name> {
     if blocks.is_empty() {
         return BTreeSet::new();
     }
@@ -194,7 +195,7 @@ pub fn nodes_in_all(blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
 }
 
 /// Compute the set of nodes that are in any current block.
-pub fn nodes_in_any(blocks: &BTreeSet<Block>) -> BTreeSet<Name> {
+pub fn nodes_in_any(blocks: &BTreeSet<Rc<Block>>) -> BTreeSet<Name> {
     blocks
         .iter()
         .fold(BTreeSet::new(), |acc, block| &acc | &block.members)
@@ -217,7 +218,7 @@ mod test {
             ..block.clone()
         };
 
-        let blocks = btreeset!{block1, block2};
+        let blocks = btreeset!{Rc::new(block1), Rc::new(block2)};
 
         assert_eq!(nodes_in_all(&blocks), btreeset!{Name(1), Name(3), Name(5)});
         assert_eq!(nodes_in_any(&blocks),

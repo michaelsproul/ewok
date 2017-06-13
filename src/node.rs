@@ -14,6 +14,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use std::fmt;
+use std::rc::Rc;
 
 const MESSAGE_FILTER_LEN: usize = 1024;
 
@@ -203,14 +204,14 @@ impl Node {
     }
 
     /// Blocks that we can legitimately vote on successors for, because we are part of them.
-    pub fn our_current_blocks<'a>(&'a self) -> Box<Iterator<Item = &'a Block> + 'a> {
+    pub fn our_current_blocks<'a>(&'a self) -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
         our_blocks(&self.current_blocks, self.our_name)
     }
 
     /// Get all blocks for our current section(s),
     ///
     /// i.e. all the blocks whose prefix matches `name`.
-    pub fn our_current_section_blocks<'a>(&'a self) -> Box<Iterator<Item = &'a Block> + 'a> {
+    pub fn our_current_section_blocks<'a>(&'a self) -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
         section_blocks(&self.current_blocks, self.our_name)
     }
 

@@ -1,5 +1,6 @@
 //! Functions for generating sections of a certain size.
 
+use std::rc::Rc;
 use block::{Block, CurrentBlocks};
 use name::{Name, Prefix};
 use node::Node;
@@ -43,11 +44,11 @@ fn construct_blocks(nodes: BTreeMap<Prefix, BTreeSet<Name>>) -> CurrentBlocks {
     nodes
         .into_iter()
         .map(|(prefix, members)| {
-                 Block {
+                 Rc::new(Block {
                      prefix,
                      members,
                      version: 0,
-                 }
+                 })
              })
         .collect()
 }

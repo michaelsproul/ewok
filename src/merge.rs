@@ -2,6 +2,7 @@ use name::Name;
 use block::{Block, Vote, CurrentBlocks, our_blocks, blocks_for_prefix};
 use std::collections::BTreeSet;
 use std::cmp;
+use std::rc::Rc;
 
 pub fn merge_blocks(current_blocks: &CurrentBlocks,
                     our_name: Name,
@@ -56,7 +57,7 @@ fn merge_rule(current_blocks: &CurrentBlocks,
 
 fn find_small_blocks<'a>(current_blocks: &'a CurrentBlocks,
                          min_section_size: usize)
-                         -> Box<Iterator<Item = &'a Block> + 'a> {
+                         -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
     Box::new(current_blocks
                  .iter()
                  .filter(move |&b| {
@@ -64,11 +65,11 @@ fn find_small_blocks<'a>(current_blocks: &'a CurrentBlocks,
                          }))
 }
 
-fn merged_block(b0: &Block, b1: &Block) -> Block {
+fn merged_block(b0: &Rc<Block>, b1: &Rc<Block>) -> Rc<Block> {
     assert_eq!(b0.prefix.sibling(), Some(b1.prefix));
-    Block {
+    Rc::new(Block {
         prefix: b0.prefix.popped(),
         version: cmp::max(b0.version, b1.version) + 1,
         members: b0.members.union(&b1.members).cloned().collect(),
-    }
+    })
 }

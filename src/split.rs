@@ -1,6 +1,7 @@
 use name::Name;
 use block::{Block, Vote, CurrentBlocks, our_blocks};
 use std::collections::BTreeSet;
+use std::rc::Rc;
 
 pub fn split_blocks(current_blocks: &CurrentBlocks,
                     our_name: Name,
@@ -13,7 +14,7 @@ pub fn split_blocks(current_blocks: &CurrentBlocks,
 
 /// If a section as described by `block` can split, return the two blocks it splits into.
 /// rule:Split
-fn split_block(block: &Block, current_blocks: &CurrentBlocks, min_split_size: usize) -> Vec<Vote> {
+fn split_block(block: &Rc<Block>, current_blocks: &CurrentBlocks, min_split_size: usize) -> Vec<Vote> {
     let p0 = block.prefix.pushed(false);
     let p1 = block.prefix.pushed(true);
     let (s0, s1): (BTreeSet<_>, _) = block
@@ -36,11 +37,11 @@ fn split_block(block: &Block, current_blocks: &CurrentBlocks, min_split_size: us
 
         let v0 = Vote {
             from: block.clone(),
-            to: b0,
+            to: Rc::new(b0),
         };
         let v1 = Vote {
             from: block.clone(),
-            to: b1,
+            to: Rc::new(b1),
         };
 
         vec![v0, v1]
@@ -50,7 +51,7 @@ fn split_block(block: &Block, current_blocks: &CurrentBlocks, min_split_size: us
 }
 
 /// True if all neighbouring and compatible blocks of `block` are of `min_split_size`.
-fn neighbours_ok(block: &Block, current_blocks: &CurrentBlocks, min_split_size: usize) -> bool {
+fn neighbours_ok(block: &Rc<Block>, current_blocks: &CurrentBlocks, min_split_size: usize) -> bool {
     current_blocks
         .iter()
         .filter(move |other_block| {

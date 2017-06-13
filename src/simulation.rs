@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
+use std::rc::Rc;
 
 use network::Network;
 use event::Event;
@@ -66,7 +67,7 @@ pub struct Simulation {
     nodes: BTreeMap<Name, Node>,
     network: Network,
     /// Set of blocks that all nodes start from (often just a single genesis block).
-    genesis_set: BTreeSet<Block>,
+    genesis_set: BTreeSet<Rc<Block>>,
     /// Parameters for the network and the simulation.
     params: SimulationParams,
     /// Parameters for nodes.
@@ -303,8 +304,6 @@ impl Simulation {
 
             // Send pending votes independently of churn events
             for node in self.nodes.values_mut() {
-                self.network.send(step, node.update_state());
-                self.network.send(step, node.broadcast_new_votes(step));
                 match node.our_current_blocks().count() {
                     0 => {
                         if step > node.step_created() + self.node_params.self_shutdown_timeout {
@@ -316,6 +315,8 @@ impl Simulation {
                     1 => node.check_conflicting_block_count(),
                     count => panic!("{:?}\nhas {} current blocks for own section.", node, count),
                 }
+                self.network.send(step, node.update_state());
+                self.network.send(step, node.broadcast_new_votes(step));
             }
 
             self.phase = self.phase_for_next_step(step);

@@ -254,6 +254,36 @@ pub fn blocks_for_prefix<'a>(blocks: &'a BTreeSet<Block>,
     Box::new(result)
 }
 
+/// Get all the votes for the history of `block` back to the last split.
+pub fn chain_segment(block: &Block, votes: &VoteCounts) -> BTreeSet<(Vote, BTreeSet<Name>)> {
+    let mut segment_votes = btreeset!{};
+
+    let mut oldest_block = block;
+
+    // Go back in history until we find the block that our section split out of.
+    while block.prefix.is_prefix_of(&oldest_block.prefix) && oldest_block.version > 0 {
+        // Oldest block is the oldest known block and we are looking for history
+        // leading up to it, so we find votes such that their `to` is `oldest_block`.
+        // TODO: an index by `to` block would make this O(n) instead of O(n^2).
+        'search: for (from, map) in votes {
+            for (to, voters) in map {
+                if to == oldest_block && is_quorum_of(voters, &from.members) {
+                    let vote = Vote {
+                        from: from.clone(),
+                        to: to.clone(),
+                    };
+                    segment_votes.insert((vote, voters.clone()));
+
+                    oldest_block = from;
+                    break 'search;
+                }
+            }
+        }
+    }
+
+    segment_votes
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -289,5 +319,46 @@ mod test {
         let current_blocks = compute_current_blocks(&candidates);
 
         assert_eq!(expected_current, current_blocks);
+    }
+
+    #[test]
+    fn segment() {
+        let b1_members = btreeset!{ Name(0), Name(1), Name(2), Name(3), Name(4) };
+        let b1 = Block {
+            prefix: Prefix::empty(),
+            version: 0,
+            members: b1_members.clone(),
+        };
+        let b2_members = btreeset!{ Name(0), Name(1), Name(2) };
+        let b2 = Block {
+            prefix: Prefix::short(1, 0),
+            version: 1,
+            members: b2_members.clone(),
+        };
+        let b3_members = &b2_members | &btreeset!{ Name(5) };
+        let b3 = Block {
+            prefix: Prefix::short(1, 0),
+            version: 2,
+            members: b3_members.clone(),
+        };
+
+        let votes = btreemap! {
+            b1.clone() => btreemap! {
+                b2.clone() => b1_members.clone(),
+            },
+            b2.clone() => btreemap! {
+                b3.clone() => b2_members.clone(),
+            },
+        };
+
+        let segment_votes = chain_segment(&b3, &votes);
+
+        let v12 = Vote { from: b1.clone(), to: b2.clone() };
+        let v23 = Vote { from: b2.clone(), to: b3.clone() };
+        let expected = btreeset! {
+            (v12, b1_members),
+            (v23, b2_members),
+        };
+        assert_eq!(segment_votes, expected);
     }
 }

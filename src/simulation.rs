@@ -12,7 +12,7 @@ use generate::generate_network;
 use consistency::check_consistency;
 use message::Message;
 use message::MessageContent::*;
-use params::{NodeParams, SimulationParams};
+use params::{NodeParams, SimulationParams, quorum};
 use random::{sample, do_with_probability, seed};
 use random_events::RandomEvents;
 use self::detail::DisconnectedPair;
@@ -104,7 +104,7 @@ impl Simulation {
                     -> Self {
         let (nodes, genesis_set) = generate_network(&sections, &node_params);
         let network = Network::new(params.max_delay);
-        let random_events = RandomEvents::new(params.clone());
+        let random_events = RandomEvents::new(params.clone(), node_params.clone());
 
         Simulation {
             nodes,
@@ -254,7 +254,7 @@ impl Simulation {
                     break;
                 }
                 if self.network.queue_is_empty() {
-                    if no_op_step_count > self.node_params.join_timeout {
+                    if no_op_step_count > self.node_params.max_timeout() {
                         break;
                     } else {
                         no_op_step_count += 1;
@@ -296,6 +296,7 @@ impl Simulation {
             }
 
             for name in to_shutdown {
+                trace!("Node({}): voluntarily shutting down", name);
                 self.apply_remove_node(name);
                 let removal_msgs = Event::RemoveNode(name).broadcast(&self.nodes);
                 self.network.send(step, removal_msgs);
@@ -321,6 +322,7 @@ impl Simulation {
         debug!("-- final node states --");
         for node in self.nodes.values() {
             debug!("{:?}", node);
+            trace!("{:#?}", node.peer_states);
         }
 
         assert!(no_op_step_count > self.node_params.join_timeout,
@@ -366,8 +368,7 @@ impl Simulation {
                 }
             }
             Shrinking => {
-                // If the next node removal would take us below quorum, move to `Finishing`.
-                if (self.nodes.len() - 1) * 2 <= self.node_params.min_section_size {
+                if self.nodes.len() <= quorum(self.node_params.min_section_size) + 1 {
                     Finishing { since_step: step + 1 }
                 } else {
                     Shrinking

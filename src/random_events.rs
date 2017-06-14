@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::cmp;
 use itertools::Itertools;
-use params::SimulationParams;
+use params::{SimulationParams, NodeParams, quorum};
 use name::Name;
 use node::Node;
 use event::Event;
@@ -9,11 +10,12 @@ use simulation::Phase;
 
 pub struct RandomEvents {
     params: SimulationParams,
+    node_params: NodeParams,
 }
 
 impl RandomEvents {
-    pub fn new(params: SimulationParams) -> Self {
-        RandomEvents { params }
+    pub fn new(params: SimulationParams, node_params: NodeParams) -> Self {
+        RandomEvents { params , node_params }
     }
 
     pub fn get_events(&self, phase: Phase, nodes: &BTreeMap<Name, Node>) -> Vec<Event> {
@@ -42,7 +44,7 @@ impl RandomEvents {
         self.find_node_to_remove(nodes).map(Event::RemoveNode)
     }
 
-    // Remove a randomly-selected node which is in a section with at least quorum + 1 members. The
+    // Remove a randomly-selected node which is in a section with at least quorum + 2 members. The
     // section's member count is calculated by removing any dead nodes from the node's own current
     // block's member list. If no suitable node can be found, the function returns `None`.
     fn find_node_to_remove(&self, nodes: &BTreeMap<Name, Node>) -> Option<Name> {
@@ -51,11 +53,15 @@ impl RandomEvents {
         shuffle(&mut names);
         for name in names {
             if let Some(our_current_block) = nodes[&name].our_current_blocks().next() {
-                let section_size = our_current_block
+                let num_live = our_current_block
                     .members
                     .intersection(&names_sorted)
                     .count();
-                if (section_size - 1) * 2 > our_current_block.members.len() {
+                // Don't sink below a quorum of our current block, OR the min section size.
+                let min_nodes = quorum(cmp::max(our_current_block.members.len(),
+                                                self.node_params.min_section_size));
+                if num_live >= min_nodes + 2 {
+                    trace!("Node({}): removed from section with {} live nodes", name, num_live);
                     return Some(name);
                 }
             }

@@ -88,3 +88,34 @@ impl Default for NodeParams {
         }
     }
 }
+
+impl NodeParams {
+    pub fn max_timeout(&self) -> u64 {
+        vec![self.join_timeout, self.self_shutdown_timeout]
+            .into_iter()
+            .max()
+            .unwrap()
+    }
+}
+
+/// Compute the number of nodes required to form a majority of `num_nodes`.
+///
+/// You should compare `num_votes >= quorum(num_nodes)`.
+pub fn quorum(num_nodes: usize) -> usize {
+    (num_nodes / 2) + 1
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_quorum() {
+        assert_eq!(501, quorum(1000));
+        assert_eq!(6, quorum(10));
+        assert_eq!(5, quorum(9));
+        assert_eq!(3, quorum(4));
+        assert_eq!(2, quorum(3));
+        assert_eq!(2, quorum(2));
+    }
+}

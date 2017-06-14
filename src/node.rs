@@ -28,6 +28,8 @@ pub struct Node {
     pub current_candidate_blocks: ValidBlocks,
     /// Our current blocks.
     pub current_blocks: CurrentBlocks,
+    /// Our previous current blocks.
+    pub prev_current_blocks: CurrentBlocks,
     /// Map from blocks to voters for that block.
     pub vote_counts: VoteCounts,
     /// Recently received votes that haven't yet been applied to the sets of valid and current
@@ -70,6 +72,7 @@ impl Node {
             our_name: name,
             valid_blocks: current_blocks.clone(),
             current_blocks: current_blocks.clone(),
+            prev_current_blocks: BTreeSet::new(),
             current_candidate_blocks: current_blocks,
             vote_counts: BTreeMap::new(),
             recent_votes: BTreeSet::new(),
@@ -105,7 +108,7 @@ impl Node {
 
     /// Update valid and current block sets, return set of newly valid blocks to broadcast,
     /// and merge messages to broadcast.
-    fn update_valid_blocks(&mut self) -> (Vec<(Vote, BTreeSet<Name>)>, CurrentBlocks) {
+    fn update_valid_blocks(&mut self) -> Vec<(Vote, BTreeSet<Name>)> {
         // Update valid blocks.
         let new_votes = mem::replace(&mut self.recent_votes, btreeset!{});
         let new_valid_votes = new_valid_blocks(&self.valid_blocks, &self.vote_counts, new_votes);
@@ -115,13 +118,13 @@ impl Node {
                         .map(|&(ref vote, _)| vote.to.clone()));
 
         // Update current blocks.
-        let prev_current = self.update_current_blocks(&new_valid_votes);
+        self.update_current_blocks(&new_valid_votes);
 
-        (new_valid_votes, prev_current)
+        new_valid_votes
     }
 
     /// Update the set of current blocks.
-    fn update_current_blocks(&mut self, new_votes: &[(Vote, BTreeSet<Name>)]) -> CurrentBlocks {
+    fn update_current_blocks(&mut self, new_votes: &[(Vote, BTreeSet<Name>)]) {
         // Any of the existing current blocks or the new valid blocks could be
         // in the next set of current blocks.
         let mut potentially_current = btreeset!{};
@@ -131,18 +134,19 @@ impl Node {
         mem::replace(&mut self.current_candidate_blocks,
                      compute_current_candidate_blocks(potentially_current));
 
-        mem::replace(&mut self.current_blocks,
-                     compute_current_blocks(&self.current_candidate_blocks))
-
+        self.prev_current_blocks = mem::replace(
+            &mut self.current_blocks,
+            compute_current_blocks(&self.current_candidate_blocks)
+        );
     }
 
-    fn merge_messages(&self, prev_current_blocks: &CurrentBlocks)
+    fn merge_messages(&self)
         -> Vec<Message> {
         let mut messages = vec![];
-        let new_current_blocks = &self.current_blocks - prev_current_blocks;
+        let new_current_blocks = &self.current_blocks - &self.prev_current_blocks;
 
         for our_new_block in section_blocks(&new_current_blocks, self.our_name) {
-            for our_prev_block in section_blocks(&prev_current_blocks, self.our_name) {
+            for our_prev_block in section_blocks(&self.prev_current_blocks, self.our_name) {
                 // Merge case.
                 if let Some(sibling_pfx) = our_prev_block.prefix.sibling() {
                     if our_new_block.prefix == our_prev_block.prefix.popped() {
@@ -152,7 +156,8 @@ impl Node {
                         // because our sibling may be split.
                         // e.g. if we are 0 and want to merge to 1, but other
                         // sections are 11, 100, 101.
-                        let sibling_blocks = prev_current_blocks.iter()
+                        let sibling_blocks = self.prev_current_blocks
+                            .iter()
                             .filter(|block| block.prefix.is_prefix_of(&sibling_pfx));
 
                         // Union of all chain segments for sibling block history.
@@ -160,7 +165,8 @@ impl Node {
                             chain_segment(sibling_block, &self.vote_counts)
                         }).collect();
 
-                        let disconn_from_sibling = prev_current_blocks.iter()
+                        let disconn_from_sibling = self.prev_current_blocks
+                            .iter()
                             .filter(|block| !block.prefix.is_neighbour(&sibling_pfx))
                             .flat_map(|block| block.members.iter().map(|n| *n));
 
@@ -214,7 +220,7 @@ impl Node {
     /// Called once per step.
     pub fn update_state(&mut self) -> Vec<Message> {
         // Update valid and current blocks.
-        let (new_valid_votes, prev_current) = self.update_valid_blocks();
+        let new_valid_votes = self.update_valid_blocks();
 
         // Broadcast vote agreement messages before pruning the current block set.
         let mut messages = self.broadcast(
@@ -227,15 +233,16 @@ impl Node {
         self.prune_split_blocks();
 
         // Generate messages related to merging.
-        messages.extend(self.merge_messages(&prev_current));
+        messages.extend(self.merge_messages());
 
         messages
     }
 
     /// Return all neighbours we're connected to (or should be connected to).
     pub fn neighbouring_nodes(&self) -> BTreeSet<Name> {
-        let mut res: BTreeSet<_> = self.current_blocks
+        let mut res: BTreeSet<_> = self.prev_current_blocks
             .iter()
+            .chain(self.current_blocks.iter())
             .flat_map(|block| block.members.iter().cloned())
             .collect();
         res.extend(self.peer_states.candidates());

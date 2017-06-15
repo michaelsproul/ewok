@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use name::{Prefix, Name};
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -28,15 +29,24 @@ impl Block {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Vote {
-    pub from: Block,
-    pub to: Block,
+    pub from: Rc<Block>,
+    pub to: Rc<Block>,
 }
 
-pub type ValidBlocks = BTreeSet<Block>;
-pub type CurrentBlocks = BTreeSet<Block>;
+pub type ValidBlocks = BTreeSet<Rc<Block>>;
+pub type CurrentBlocks = BTreeSet<Rc<Block>>;
 
 /// Mapping from votes to voters: (vote.from -> (vote.to -> names)).
-pub type VoteCounts = BTreeMap<Block, BTreeMap<Block, BTreeSet<Name>>>;
+pub type VoteCounts = BTreeMap<Rc<Block>, BTreeMap<Rc<Block>, BTreeSet<Name>>>;
+
+#[cfg(feature = "fast")]
+fn abs_diff(x: usize, y: usize) -> usize {
+    if x >= y {
+        x - y
+    } else {
+        y - x
+    }
+}
 
 impl Block {
     /// Create a genesis block.
@@ -49,29 +59,35 @@ impl Block {
     }
 
     /// Create a new block with a node added.
-    pub fn add_node(&self, added: Name) -> Self {
+    pub fn add_node(&self, added: Name) -> Rc<Self> {
         let mut members = self.members.clone();
         members.insert(added);
-        Block {
+        Rc::new(Block {
             prefix: self.prefix,
             version: self.version + 1,
             members,
-        }
+        })
     }
 
     /// Create a new block with a node removed.
-    pub fn remove_node(&self, removed: Name) -> Self {
+    pub fn remove_node(&self, removed: Name) -> Rc<Self> {
         let mut members = self.members.clone();
         assert!(members.remove(&removed));
-        Block {
+        Rc::new(Block {
             prefix: self.prefix,
             version: self.version + 1,
             members,
-        }
+        })
     }
 
+
     /// Is this block admissible after the given other block?
-    pub fn is_admissible_after(&self, other: &Block) -> bool {
+    ///
+    /// We have 2 versions of this function: a real BFT one and a fast one that's only
+    /// safe in the simulation.
+    #[cfg(not(feature = "fast"))]
+    fn is_admissible_after(&self, other: &Block) -> bool {
+        // This is the proper BFT version of `is_admissible_after`.
         if self.version <= other.version {
             return false;
         }
@@ -100,6 +116,30 @@ impl Block {
             false
         }
     }
+
+    #[cfg(feature = "fast")]
+    fn is_admissible_after(&self, other: &Block) -> bool {
+        // This is an approximate version of `is_admissible_after` that is sufficient
+        // for the simulation (because nobody votes invalidly), and is much faster.
+        if self.version <= other.version {
+            return false;
+        }
+
+        // Add/remove case.
+        if self.prefix == other.prefix {
+            abs_diff(self.members.len(), other.members.len()) == 1
+        }
+        // Split case.
+        else if self.prefix.popped() == other.prefix {
+            true
+        }
+        // Merge case
+        else if other.prefix.popped() == self.prefix {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 /// Compute the set of blocks that become valid as a result of adding `new_vote`.
@@ -113,7 +153,7 @@ impl Block {
 /// votes are the new valid blocks that should be added to `valid_blocks`.
 pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
                         vote_counts: &VoteCounts,
-                        new_vote: &Vote)
+                        new_votes: BTreeSet<Vote>)
                         -> Vec<(Vote, BTreeSet<Name>)> {
     // Set of valid blocks to branch out from.
     // Stored as a set of votes where the frontier blocks are the "to" component,
@@ -123,17 +163,17 @@ pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
     // Set of votes for new valid blocks.
     let mut new_valid_votes = vec![];
 
-    // If the new vote extends an existing valid block, we need to add it to the frontier set
+    // If a new vote extends an existing valid block, we need to add it to the frontier set
     // so we can branch out from it.
-    if valid_blocks.contains(&new_vote.from) {
-        // This dummy vote is a bit of hack, we really just need init_vote.to = new_vote.from.
-        let init_vote = Vote {
-            from: new_vote.from.clone(),
-            to: new_vote.from.clone(),
-        };
-        frontier.insert((init_vote, BTreeSet::new()));
-    } else {
-        return new_valid_votes;
+    for new_vote in new_votes {
+        if valid_blocks.contains(&new_vote.from) {
+            // This dummy vote is a bit of hack, we really just need init_vote.to = new_vote.from.
+            let init_vote = Vote {
+                from: new_vote.to,
+                to: new_vote.from,
+            };
+            frontier.insert((init_vote, BTreeSet::new()));
+        }
     }
 
     while !frontier.is_empty() {
@@ -159,7 +199,7 @@ pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
 ///
 /// a succeeds b == b witnesses a.
 fn successors<'a>(vote_counts: &'a VoteCounts,
-                  from: &'a Block)
+                  from: &'a Rc<Block>)
                   -> Box<Iterator<Item = (Vote, BTreeSet<Name>)> + 'a> {
     let iter = vote_counts
         .get(from)
@@ -181,9 +221,9 @@ fn successors<'a>(vote_counts: &'a VoteCounts,
 }
 
 /// Compute the set of candidates for current blocks from a set of valid blocks.
-pub fn compute_current_candidate_blocks(valid_blocks: BTreeSet<Block>) -> ValidBlocks {
+pub fn compute_current_candidate_blocks(valid_blocks: ValidBlocks) -> ValidBlocks {
     // 1. Sort by version.
-    let mut blocks_by_version: BTreeMap<u64, BTreeSet<Block>> = btreemap!{};
+    let mut blocks_by_version: BTreeMap<u64, BTreeSet<Rc<Block>>> = btreemap!{};
     for block in valid_blocks {
         blocks_by_version
             .entry(block.version)
@@ -192,10 +232,10 @@ pub fn compute_current_candidate_blocks(valid_blocks: BTreeSet<Block>) -> ValidB
     }
 
     // 2. Collect blocks not covered by higher-version prefixes.
-    let mut current_blocks: BTreeSet<Block> = btreeset!{};
+    let mut current_blocks: BTreeSet<Rc<Block>> = btreeset!{};
     let mut current_pfxs: BTreeSet<Prefix> = btreeset!{};
     for (_, blocks) in blocks_by_version.into_iter().rev() {
-        let new_current: Vec<Block> = blocks
+        let new_current: Vec<Rc<Block>> = blocks
             .into_iter()
             .filter(|block| !block.prefix.is_covered_by(&current_pfxs))
             .collect();
@@ -206,7 +246,7 @@ pub fn compute_current_candidate_blocks(valid_blocks: BTreeSet<Block>) -> ValidB
     current_blocks
 }
 
-pub fn compute_current_blocks(candidate_blocks: &BTreeSet<Block>) -> CurrentBlocks {
+pub fn compute_current_blocks(candidate_blocks: &ValidBlocks) -> CurrentBlocks {
     candidate_blocks
         .iter()
         .filter(|b| !candidate_blocks.iter().any(|c| c.outranks(b)))
@@ -216,15 +256,19 @@ pub fn compute_current_blocks(candidate_blocks: &BTreeSet<Block>) -> CurrentBloc
 
 /// Return true if `voters` form a quorum of `members`.
 pub fn is_quorum_of(voters: &BTreeSet<Name>, members: &BTreeSet<Name>) -> bool {
+    #[cfg(not(feature = "fast"))]
     let valid_voters = voters & members;
+    #[cfg(feature = "fast")]
+    let valid_voters = voters;
+
     assert_eq!(voters.len(), valid_voters.len());
     valid_voters.len() * 2 > members.len()
 }
 
 /// Blocks that we can legitimately vote on successors for, because we are part of them.
-pub fn our_blocks<'a>(blocks: &'a BTreeSet<Block>,
+pub fn our_blocks<'a>(blocks: &'a BTreeSet<Rc<Block>>,
                       our_name: Name)
-                      -> Box<Iterator<Item = &'a Block> + 'a> {
+                      -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
     let ours = blocks
         .iter()
         .filter(move |b| b.members.contains(&our_name));
@@ -232,14 +276,14 @@ pub fn our_blocks<'a>(blocks: &'a BTreeSet<Block>,
 }
 
 /// Set of current prefixes we belong to
-pub fn our_prefixes(blocks: &BTreeSet<Block>, our_name: Name) -> BTreeSet<Prefix> {
+pub fn our_prefixes(blocks: &BTreeSet<Rc<Block>>, our_name: Name) -> BTreeSet<Prefix> {
     our_blocks(blocks, our_name).map(|b| b.prefix).collect()
 }
 
 /// Blocks that match our name, but that we are not necessarily a part of.
-pub fn section_blocks<'a>(blocks: &'a BTreeSet<Block>,
+pub fn section_blocks<'a>(blocks: &'a BTreeSet<Rc<Block>>,
                           our_name: Name)
-                          -> Box<Iterator<Item = &'a Block> + 'a> {
+                          -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
     let section_blocks = blocks
         .iter()
         .filter(move |block| block.prefix.matches(our_name));
@@ -247,9 +291,9 @@ pub fn section_blocks<'a>(blocks: &'a BTreeSet<Block>,
 }
 
 /// Blocks that contain a given prefix.
-pub fn blocks_for_prefix<'a>(blocks: &'a BTreeSet<Block>,
+pub fn blocks_for_prefix<'a>(blocks: &'a BTreeSet<Rc<Block>>,
                              prefix: Prefix)
-                             -> Box<Iterator<Item = &'a Block> + 'a> {
+                             -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
     let result = blocks.iter().filter(move |&b| b.prefix == prefix);
     Box::new(result)
 }
@@ -265,24 +309,24 @@ mod test {
     #[test]
     fn covering() {
         let valid_blocks = btreeset![
-            Block {
+            Rc::new(Block {
                 prefix: Prefix::empty(),
                 version: 0,
                 members: btreeset!{ Name(0), short_name(0b10000000) }
-            },
-            Block {
+            }),
+            Rc::new(Block {
                 prefix: Prefix::short(1, 0),
                 version: 1,
                 members: btreeset!{ Name(0) }
-            },
+            }),
         ];
 
         let expected_current = btreeset![
-            Block {
+            Rc::new(Block {
                 prefix: Prefix::empty(),
                 version: 0,
                 members: btreeset!{ Name(0), short_name(0b10000000) }
-            },
+            }),
         ];
 
         let candidates = compute_current_candidate_blocks(valid_blocks);

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
+use std::rc::Rc;
 
 use network::Network;
 use event::Event;
@@ -11,7 +12,7 @@ use generate::generate_network;
 use consistency::check_consistency;
 use message::Message;
 use message::MessageContent::*;
-use params::{NodeParams, SimulationParams};
+use params::{NodeParams, SimulationParams, quorum};
 use random::{sample, do_with_probability, seed};
 use random_events::RandomEvents;
 use self::detail::DisconnectedPair;
@@ -66,7 +67,7 @@ pub struct Simulation {
     nodes: BTreeMap<Name, Node>,
     network: Network,
     /// Set of blocks that all nodes start from (often just a single genesis block).
-    genesis_set: BTreeSet<Block>,
+    genesis_set: BTreeSet<Rc<Block>>,
     /// Parameters for the network and the simulation.
     params: SimulationParams,
     /// Parameters for nodes.
@@ -103,7 +104,7 @@ impl Simulation {
                     -> Self {
         let (nodes, genesis_set) = generate_network(&sections, &node_params);
         let network = Network::new(params.max_delay);
-        let random_events = RandomEvents::new(params.clone());
+        let random_events = RandomEvents::new(params.clone(), node_params.clone());
 
         Simulation {
             nodes,
@@ -253,7 +254,7 @@ impl Simulation {
                     break;
                 }
                 if self.network.queue_is_empty() {
-                    if no_op_step_count > self.node_params.join_timeout {
+                    if no_op_step_count > self.node_params.max_timeout() {
                         break;
                     } else {
                         no_op_step_count += 1;
@@ -295,25 +296,21 @@ impl Simulation {
             }
 
             for name in to_shutdown {
+                trace!("Node({}): voluntarily shutting down", name);
                 self.apply_remove_node(name);
                 let removal_msgs = Event::RemoveNode(name).broadcast(&self.nodes);
                 self.network.send(step, removal_msgs);
             }
 
-            // Send pending votes independently of churn events
+            // Update node state (current blocks), and send new votes.
             for node in self.nodes.values_mut() {
-                self.network.send(step, node.broadcast_new_votes(step));
                 match node.our_current_blocks().count() {
-                    0 => {
-                        if step > node.step_created() + self.node_params.self_shutdown_timeout {
-                            // The node should have joined by now and received the votes showing it
-                            // existing in at least one current block.
-                            panic!("{:?}\ndoesn't have any current blocks", node)
-                        }
-                    }
+                    0 => (),
                     1 => node.check_conflicting_block_count(),
                     count => panic!("{:?}\nhas {} current blocks for own section.", node, count),
                 }
+                self.network.send(step, node.update_state());
+                self.network.send(step, node.broadcast_new_votes(step));
             }
 
             self.phase = self.phase_for_next_step(step);
@@ -325,6 +322,7 @@ impl Simulation {
         debug!("-- final node states --");
         for node in self.nodes.values() {
             debug!("{:?}", node);
+            trace!("{:#?}", node.peer_states);
         }
 
         assert!(no_op_step_count > self.node_params.join_timeout,
@@ -370,8 +368,7 @@ impl Simulation {
                 }
             }
             Shrinking => {
-                // If the next node removal would take us below quorum, move to `Finishing`.
-                if (self.nodes.len() - 1) * 2 <= self.node_params.min_section_size {
+                if self.nodes.len() <= quorum(self.node_params.min_section_size) + 1 {
                     Finishing { since_step: step + 1 }
                 } else {
                     Shrinking

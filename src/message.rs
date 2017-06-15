@@ -22,8 +22,11 @@ pub enum MessageContent {
     NodeJoined,
     /// Message sent to a joining node to get it up to date on the current blocks.
     BootstrapMsg(VoteCounts),
-    /// Pseudo-message sent to tell recipient that they've lost their connection to sender.
-    ConnectionLost,
-    /// Pseudo-message sent to tell recipient that they've regained a connection to sender.
-    ConnectionRegained,
+    /// Connect and disconnect represent the connection or disconnection of two nodes.
+    /// Can be sent from node-to-node or from the simulation to a pair of nodes (for disconnects
+    /// and reconnects).
+    /// See handling in node.rs.
+    Connect,
+    /// ^See above.
+    Disconnect
 }

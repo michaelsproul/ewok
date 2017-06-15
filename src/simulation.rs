@@ -170,12 +170,12 @@ impl Simulation {
         let messages = vec![Message {
                                 sender: pair.lower(),
                                 recipient: pair.higher(),
-                                content: ConnectionLost,
+                                content: Disconnect,
                             },
                             Message {
                                 sender: pair.higher(),
                                 recipient: pair.lower(),
-                                content: ConnectionLost,
+                                content: Disconnect,
                             }];
 
         self.disconnected.insert(pair);
@@ -198,12 +198,12 @@ impl Simulation {
                 messages.push(Message {
                                   sender: pair.lower(),
                                   recipient: pair.higher(),
-                                  content: ConnectionRegained,
+                                  content: Connect,
                               });
                 messages.push(Message {
                                   sender: pair.higher(),
                                   recipient: pair.lower(),
-                                  content: ConnectionRegained,
+                                  content: Connect,
                               });
             } else {
                 self.disconnected.insert(pair);
@@ -309,7 +309,7 @@ impl Simulation {
                     1 => node.check_conflicting_block_count(),
                     count => panic!("{:?}\nhas {} current blocks for own section.", node, count),
                 }
-                self.network.send(step, node.update_state());
+                self.network.send(step, node.update_state(step));
                 self.network.send(step, node.broadcast_new_votes(step));
             }
 
@@ -322,7 +322,6 @@ impl Simulation {
         debug!("-- final node states --");
         for node in self.nodes.values() {
             debug!("{:?}", node);
-            trace!("{:#?}", node.peer_states);
         }
 
         assert!(no_op_step_count > self.node_params.join_timeout,

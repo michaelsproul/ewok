@@ -64,7 +64,7 @@ fn remove_node(to_remove: Name, nodes: &BTreeMap<Name, Node>) -> Vec<Message> {
                  Message {
                      sender: to_remove,
                      recipient: neighbour,
-                     content: ConnectionLost,
+                     content: Disconnect,
                  }
              })
         .collect()

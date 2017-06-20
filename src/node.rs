@@ -296,8 +296,10 @@ impl Node {
         let new_valid_votes = self.update_valid_blocks();
 
         // Broadcast vote agreement messages before pruning the current block set.
+        let our_name = self.our_name;
         let mut messages = self.broadcast(
             new_valid_votes.into_iter()
+                .filter(|&(ref vote, _)| vote.from.members.contains(&our_name))
                 .map(VoteAgreedMsg)
                 .collect(),
             step
@@ -315,30 +317,21 @@ impl Node {
         messages
     }
 
-    pub fn neighbouring_nodes(&self, step: u64) -> BTreeSet<Name> {
-        let mut res: BTreeSet<_> = self.prev_current_blocks
-            .iter()
-            .chain(self.current_blocks.iter())
-            .flat_map(|block| block.members.iter().cloned())
-            .collect();
-        res.extend(self.nodes_to_add(step));
-        res.remove(&self.our_name);
-        res
-    }
-
     /// Create messages for every relevant neighbour for every vote in the given vec.
     pub fn broadcast(&self, msgs: Vec<MessageContent>, step: u64) -> Vec<Message> {
-        self.neighbouring_nodes(step)
-            .into_iter()
-            .flat_map(|neighbour| {
-                msgs.iter()
-                    .map(move |content| {
-                             Message {
-                                 sender: self.our_name,
-                                 recipient: neighbour,
-                                 content: content.clone(),
-                             }
-                         })
+        msgs.into_iter()
+            .flat_map(move |content| {
+                let mut recipients = content.recipients(&self.current_blocks);
+                recipients.extend(self.nodes_to_add(step));
+                recipients.remove(&self.our_name);
+
+                recipients.into_iter().map(move |recipient| {
+                    Message {
+                        sender: self.our_name,
+                        recipient,
+                        content: content.clone()
+                    }
+                })
             })
             .collect()
     }
@@ -513,8 +506,11 @@ impl Node {
 
     /// Returns true if this node should shutdown because it has failed to join a section.
     pub fn should_shutdown(&self, step: u64) -> bool {
-        step >= self.step_created + self.params.self_shutdown_timeout &&
-        self.our_current_blocks().count() == 0
+        let timeout_elapsed = step >= self.step_created + self.params.self_shutdown_timeout;
+        let no_blocks = self.our_current_blocks().count() == 0;
+        let insufficient_connections = self.connections.len() <= 2;
+
+        timeout_elapsed && (no_blocks || insufficient_connections)
     }
 
     pub fn step_created(&self) -> u64 {

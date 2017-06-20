@@ -1,6 +1,6 @@
-use block::{Vote, VoteCounts};
+use block::{Vote, VoteCounts, CurrentBlocks};
 use name::Name;
-
+use self::MessageContent::*;
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -29,4 +29,21 @@ pub enum MessageContent {
     Connect,
     /// ^See above.
     Disconnect
+}
+
+impl MessageContent {
+    pub fn recipients(&self, current_blocks: &CurrentBlocks) -> BTreeSet<Name> {
+        match *self {
+            // Send votes only to our section.
+            VoteMsg(Vote { ref from, ref to }) => {
+                &from.members | &to.members
+            }
+            // Send anything else to all connected neighbours.
+            _ => {
+                current_blocks.iter()
+                    .flat_map(|block| block.members.iter().cloned())
+                    .collect()
+            }
+        }
+    }
 }

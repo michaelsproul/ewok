@@ -15,6 +15,7 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 use std::fmt;
 use std::rc::Rc;
+use itertools::Itertools;
 
 const MESSAGE_FILTER_LEN: usize = 1024;
 
@@ -160,8 +161,13 @@ impl Node {
         );
     }
 
-    fn merge_messages(&self)
-        -> Vec<Message> {
+    /// Construct messages to send because of a merge in our own section, if one has occurred.
+    ///
+    /// Currently this sends the full histories of the _descendants of our sibling prefix_
+    /// to any of our neighbours that they would previously have been disconnected from.
+    /// E.g. we send history of 110 and 111 to 00 if we are 01 and merging with 00 into 0.
+    // FIXME(michael): break this function into smaller readable + testable parts.
+    fn merge_messages(&self) -> Vec<Message> {
         let mut messages = vec![];
         let new_current_blocks = &self.current_blocks - &self.prev_current_blocks;
 
@@ -172,31 +178,46 @@ impl Node {
                     if our_new_block.prefix == our_prev_block.prefix.popped() {
                         // In the case of a merge, send our sibling's history to all the
                         // sections we are connected to but they are not.
-                        // We need to send history for all descendents of our sibling prefix,
+                        // We need to send history for all descendants of our sibling prefix,
                         // because our sibling may be split.
-                        // e.g. if we are 0 and want to merge to 1, but other
-                        // sections are 11, 100, 101.
                         let sibling_blocks = self.prev_current_blocks
                             .iter()
-                            .filter(|block| block.prefix.is_prefix_of(&sibling_pfx));
+                            .filter(|block| sibling_pfx.is_prefix_of(&block.prefix));
+
+                        let disconn_from_sibling = self.prev_current_blocks
+                            .iter()
+                            .filter(|block| {
+                                block.prefix != sibling_pfx &&
+                                !block.prefix.is_neighbour(&sibling_pfx)
+                            })
+                            .inspect(|block| {
+                                trace!("{}: updating {:?} on history of {:?} because of merge",
+                                       self,
+                                       block.prefix,
+                                       sibling_pfx);
+                            })
+                            .flat_map(|block| block.members.iter().cloned())
+                            .collect_vec();
+
+                        // If there are no disconnected neighbour sections, don't try to compute
+                        // the chain segment.
+                        if disconn_from_sibling.is_empty() {
+                            continue;
+                        }
 
                         // Union of all chain segments for sibling block history.
                         let segments: BTreeSet<_> = sibling_blocks.flat_map(|sibling_block| {
                             chain_segment(sibling_block, &self.vote_counts)
                         }).collect();
 
-                        let disconn_from_sibling = self.prev_current_blocks
-                            .iter()
-                            .filter(|block| !block.prefix.is_neighbour(&sibling_pfx))
-                            .flat_map(|block| block.members.iter().map(|n| *n));
-
-                        let new_messages = disconn_from_sibling.map(|neighbour| {
-                            Message {
-                                sender: self.our_name,
-                                recipient: neighbour,
-                                content: VoteBundle(segments.clone()),
-                            }
-                        });
+                        let new_messages = disconn_from_sibling.into_iter()
+                            .map(|neighbour| {
+                                Message {
+                                    sender: self.our_name,
+                                    recipient: neighbour,
+                                    content: VoteBundle(segments.clone()),
+                                }
+                            });
                         messages.extend(new_messages);
                     }
                 }

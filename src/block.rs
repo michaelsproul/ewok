@@ -298,6 +298,30 @@ pub fn blocks_for_prefix<'a>(blocks: &'a BTreeSet<Rc<Block>>,
     Box::new(result)
 }
 
+/// Find a predecessor of the given block with a quorum of votes.
+///
+/// Return the predecessor (block), as well as the vote (edge) from that predecessor to `block`.
+// TODO: an index by `to` block would make this O(max_degree) instead of O(n^2).
+fn predecessor<'a>(
+    block: &Rc<Block>,
+    votes: &'a VoteCounts,
+) -> Option<(&'a Rc<Block>, Vote, BTreeSet<Name>)>
+{
+    for (from, map) in votes {
+        for (to, voters) in map {
+            if to == block && is_quorum_of(voters, &from.members) {
+                let vote = Vote {
+                    from: from.clone(),
+                    to: to.clone(),
+                };
+
+                return Some((from, vote, voters.clone()));
+            }
+        }
+    }
+    None
+}
+
 /// Get all the votes for the history of `block` back to the last split.
 pub fn chain_segment(block: &Rc<Block>, votes: &VoteCounts) -> BTreeSet<(Vote, BTreeSet<Name>)> {
     let mut segment_votes = btreeset!{};
@@ -306,21 +330,14 @@ pub fn chain_segment(block: &Rc<Block>, votes: &VoteCounts) -> BTreeSet<(Vote, B
 
     // Go back in history until we find the block that our section split out of.
     while block.prefix.is_prefix_of(&oldest_block.prefix) && oldest_block.version > 0 {
-        // Oldest block is the oldest known block and we are looking for history
-        // leading up to it, so we find votes such that their `to` is `oldest_block`.
-        // TODO: an index by `to` block would make this O(n) instead of O(n^2).
-        'search: for (from, map) in votes {
-            for (to, voters) in map {
-                if to == oldest_block && is_quorum_of(voters, &from.members) {
-                    let vote = Vote {
-                        from: from.clone(),
-                        to: to.clone(),
-                    };
-                    segment_votes.insert((vote, voters.clone()));
-
-                    oldest_block = from;
-                    break 'search;
-                }
+        match predecessor(oldest_block, votes) {
+            Some((predecessor, vote, voters)) => {
+                segment_votes.insert((vote, voters));
+                oldest_block = predecessor;
+            }
+            None => {
+                warn!("WARNING: couldn't find a predecessor for: {:?}", oldest_block);
+                break;
             }
         }
     }

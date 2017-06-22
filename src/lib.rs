@@ -17,7 +17,6 @@ pub mod name;
 pub mod network;
 pub mod node;
 pub mod params;
-pub mod peer_state;
 pub mod random;
 pub mod random_events;
 pub mod simulation;

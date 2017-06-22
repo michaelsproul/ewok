@@ -3,6 +3,7 @@ extern crate ewok;
 extern crate maplit;
 
 use ewok::name::Prefix;
+use ewok::event::Event;
 use ewok::event::Event::*;
 use ewok::event_schedule::EventSchedule;
 use ewok::logging::init_logging;
@@ -45,6 +46,12 @@ fn p10() -> Prefix {
 }
 fn p11() -> Prefix {
     Prefix::short(2, 0b11000000)
+}
+fn p110() -> Prefix {
+    Prefix::short(3, 0b11000000)
+}
+fn p111() -> Prefix {
+    Prefix::short(3, 0b11100000)
 }
 
 #[test]
@@ -198,6 +205,49 @@ fn triple_drop_merge() {
             RemoveNodeFrom(p0())
         ],
     });
+
+    let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
+    simulation.run().unwrap();
+}
+
+fn add_events(schedule: &mut EventSchedule, offset: u64, spacing: u64, events: Vec<Event>) {
+    let start_step = schedule.schedule.keys().next_back().cloned().unwrap_or(0) + offset;
+
+    let timed_events = events.into_iter()
+        .enumerate()
+        .map(|(i, ev)| (start_step + (i as u64 + 1) * spacing, vec![ev]));
+
+    schedule.schedule.extend(timed_events);
+}
+
+#[test]
+fn growth_then_cascading_merge() {
+    init_logging();
+
+    let node_params = NodeParams::default();
+    let params = default_params();
+
+    let sections = btreemap! {
+        p0() => node_params.min_section_size,
+        p1() => node_params.min_section_size,
+    };
+
+    let step_size = 20;
+    let mut schedule = EventSchedule::empty();
+
+    let add_to = |prefix: Prefix| AddNode(prefix.substituted_in(random()));
+
+    // 8 nodes in 10.
+    add_events(&mut schedule, 0, step_size, (0..9).map(|_| add_to(p10())).collect());
+
+    // 8 nodes in 111 (should cause a split into 10 and 11).
+    add_events(&mut schedule, 50, step_size, (0..9).map(|_| add_to(p111())).collect());
+
+    // 8 nodes in 110 (should cause a split into 110 and 111).
+    add_events(&mut schedule, 50, step_size, (0..9).map(|_| add_to(p110())).collect());
+
+    // Remove 8 nodes from 10, should cause a cascading merge!
+    add_events(&mut schedule, 50, 2 * step_size, (0..8).map(|_| RemoveNodeFrom(p10())).collect());
 
     let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
     simulation.run().unwrap();

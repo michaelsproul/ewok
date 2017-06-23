@@ -57,20 +57,22 @@ impl fmt::Display for Node {
 
 impl fmt::Debug for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f,
-               "Node({}): {} valid blocks;   {} vote counts with max \"to\" blocks of {:?};   {} \
+        write!(
+            f,
+            "Node({}): {} valid blocks;   {} vote counts with max \"to\" blocks of {:?};   {} \
                current blocks: {:#?}",
-               self.our_name,
-               self.valid_blocks.len(),
-               self.vote_counts.len(),
-               self.vote_counts.values().map(BTreeMap::len).max(),
-               self.current_blocks.len(),
-               self.current_blocks)
+            self.our_name,
+            self.valid_blocks.len(),
+            self.vote_counts.len(),
+            self.vote_counts.values().map(BTreeMap::len).max(),
+            self.current_blocks.len(),
+            self.current_blocks
+        )
     }
 }
 
 pub struct Candidate {
-    step_added: u64
+    step_added: u64,
 }
 
 impl Candidate {
@@ -81,9 +83,9 @@ impl Candidate {
 
 /// Compute the set of nodes that are in any current block.
 pub fn nodes_in_any(blocks: &BTreeSet<Rc<Block>>) -> BTreeSet<Name> {
-    blocks
-        .iter()
-        .fold(BTreeSet::new(), |acc, block| &acc | &block.members)
+    blocks.iter().fold(BTreeSet::new(), |acc, block| {
+        &acc | &block.members
+    })
 }
 
 impl Node {
@@ -116,7 +118,8 @@ impl Node {
 
     /// Insert a vote into our local cache of votes.
     fn add_vote<I>(&mut self, vote: Vote, voted_for: I)
-        where I: IntoIterator<Item = Name>
+    where
+        I: IntoIterator<Item = Name>,
     {
         self.recent_votes.insert(vote.clone());
         let voters = self.vote_counts
@@ -133,10 +136,11 @@ impl Node {
         // Update valid blocks.
         let new_votes = mem::replace(&mut self.recent_votes, btreeset!{});
         let new_valid_votes = new_valid_blocks(&self.valid_blocks, &self.vote_counts, new_votes);
-        self.valid_blocks
-            .extend(new_valid_votes
-                        .iter()
-                        .map(|&(ref vote, _)| vote.to.clone()));
+        self.valid_blocks.extend(new_valid_votes.iter().map(
+            |&(ref vote, _)| {
+                vote.to.clone()
+            },
+        ));
 
         // Update current blocks.
         self.update_current_blocks(&new_valid_votes);
@@ -149,15 +153,20 @@ impl Node {
         // Any of the existing current blocks or the new valid blocks could be
         // in the next set of current blocks.
         let mut potentially_current = btreeset!{};
-        potentially_current.extend(mem::replace(&mut self.current_candidate_blocks, btreeset!{}));
+        potentially_current.extend(mem::replace(
+            &mut self.current_candidate_blocks,
+            btreeset!{},
+        ));
         potentially_current.extend(new_votes.iter().map(|&(ref vote, _)| vote.to.clone()));
 
-        mem::replace(&mut self.current_candidate_blocks,
-                     compute_current_candidate_blocks(potentially_current));
+        mem::replace(
+            &mut self.current_candidate_blocks,
+            compute_current_candidate_blocks(potentially_current),
+        );
 
         self.prev_current_blocks = mem::replace(
             &mut self.current_blocks,
-            compute_current_blocks(&self.current_candidate_blocks)
+            compute_current_blocks(&self.current_candidate_blocks),
         );
     }
 
@@ -180,21 +189,23 @@ impl Node {
                         // sections we are connected to but they are not.
                         // We need to send history for all descendants of our sibling prefix,
                         // because our sibling may be split.
-                        let sibling_blocks = self.prev_current_blocks
-                            .iter()
-                            .filter(|block| sibling_pfx.is_prefix_of(&block.prefix));
+                        let sibling_blocks = self.prev_current_blocks.iter().filter(|block| {
+                            sibling_pfx.is_prefix_of(&block.prefix)
+                        });
 
                         let disconn_from_sibling = self.prev_current_blocks
                             .iter()
                             .filter(|block| {
                                 block.prefix != sibling_pfx &&
-                                !block.prefix.is_neighbour(&sibling_pfx)
+                                    !block.prefix.is_neighbour(&sibling_pfx)
                             })
                             .inspect(|block| {
-                                trace!("{}: updating {:?} on history of {:?} because of merge",
-                                       self,
-                                       block.prefix,
-                                       sibling_pfx);
+                                trace!(
+                                    "{}: updating {:?} on history of {:?} because of merge",
+                                    self,
+                                    block.prefix,
+                                    sibling_pfx
+                                );
                             })
                             .flat_map(|block| block.members.iter().cloned())
                             .collect_vec();
@@ -206,18 +217,19 @@ impl Node {
                         }
 
                         // Union of all chain segments for sibling block history.
-                        let segments: BTreeSet<_> = sibling_blocks.flat_map(|sibling_block| {
-                            chain_segment(sibling_block, &self.vote_counts)
-                        }).collect();
+                        let segments: BTreeSet<_> = sibling_blocks
+                            .flat_map(|sibling_block| {
+                                chain_segment(sibling_block, &self.vote_counts)
+                            })
+                            .collect();
 
-                        let new_messages = disconn_from_sibling.into_iter()
-                            .map(|neighbour| {
-                                Message {
-                                    sender: self.our_name,
-                                    recipient: neighbour,
-                                    content: VoteBundle(segments.clone()),
-                                }
-                            });
+                        let new_messages = disconn_from_sibling.into_iter().map(|neighbour| {
+                            Message {
+                                sender: self.our_name,
+                                recipient: neighbour,
+                                content: VoteBundle(segments.clone()),
+                            }
+                        });
                         messages.extend(new_messages);
                     }
                 }
@@ -248,7 +260,7 @@ impl Node {
             .get(name)
             .map(|candidate| {
                 candidate.is_recent(self.params.join_timeout, step) &&
-                self.connections.contains(name)
+                    self.connections.contains(name)
             })
             .unwrap_or(false)
     }
@@ -266,7 +278,9 @@ impl Node {
         let to_disconnect: BTreeSet<Name> = {
             self.connections
                 .iter()
-                .filter(|name| !neighbours.contains(&name) && !self.is_candidate(&name, step))
+                .filter(|name| {
+                    !neighbours.contains(&name) && !self.is_candidate(&name, step)
+                })
                 .cloned()
                 .collect()
         };
@@ -276,17 +290,17 @@ impl Node {
             self.connections.remove(node);
         }
 
-        let disconnects = to_disconnect.into_iter()
-            .map(|neighbour| {
-                Message {
-                    sender: our_name,
-                    recipient: neighbour,
-                    content: MessageContent::Disconnect,
-                }
-            });
+        let disconnects = to_disconnect.into_iter().map(|neighbour| {
+            Message {
+                sender: our_name,
+                recipient: neighbour,
+                content: MessageContent::Disconnect,
+            }
+        });
 
         let to_connect: BTreeSet<Name> = {
-            neighbours.iter()
+            neighbours
+                .iter()
                 .filter(|name| {
                     !self.connections.contains(&name) && !self.connect_requests.contains(&name)
                 })
@@ -299,14 +313,13 @@ impl Node {
             self.connect_requests.insert(*node);
         }
 
-        let connects = to_connect.into_iter()
-            .map(|neighbour| {
-                Message {
-                    sender: our_name,
-                    recipient: neighbour,
-                    content: MessageContent::Connect,
-                }
-            });
+        let connects = to_connect.into_iter().map(|neighbour| {
+            Message {
+                sender: our_name,
+                recipient: neighbour,
+                content: MessageContent::Connect,
+            }
+        });
 
         connects.chain(disconnects).collect()
     }
@@ -319,11 +332,8 @@ impl Node {
         // Broadcast vote agreement messages before pruning the current block set.
         let our_name = self.our_name;
         let mut messages = self.broadcast(
-            new_valid_votes.into_iter()
-                .filter(|&(ref vote, _)| vote.from.members.contains(&our_name))
-                .map(VoteAgreedMsg)
-                .collect(),
-            step
+            new_valid_votes.into_iter().map(VoteAgreedMsg).collect(),
+            step,
         );
 
         // Prune blocks that are no longer relevant because of splitting.
@@ -350,7 +360,7 @@ impl Node {
                     Message {
                         sender: self.our_name,
                         recipient,
-                        content: content.clone()
+                        content: content.clone(),
                     }
                 })
             })
@@ -366,11 +376,13 @@ impl Node {
                 .or_insert(0);
             *count += 1;
             if *count == self.params.max_conflicting_blocks {
-                panic!("{:?}\nhas {} valid blocks for {:?} with version {}.",
-                       self,
-                       count,
-                       block.prefix,
-                       block.version);
+                panic!(
+                    "{:?}\nhas {} valid blocks for {:?} with version {}.",
+                    self,
+                    count,
+                    block.prefix,
+                    block.version
+                );
             }
         }
     }
@@ -397,19 +409,19 @@ impl Node {
             .iter()
             .filter(|&(name, candidate)| {
                 self.connections.contains(name) &&
-                candidate.is_recent(self.params.join_timeout, step)
+                    candidate.is_recent(self.params.join_timeout, step)
             })
             .map(|(name, _)| *name)
             .collect()
     }
 
     fn nodes_to_drop(&self, current_block: &Rc<Block>) -> Vec<Name> {
-        current_block.members
+        current_block
+            .members
             .iter()
             .filter(|peer| {
-                **peer != self.our_name &&
-                !self.connections.contains(peer) &&
-                !self.candidates.contains_key(peer)
+                **peer != self.our_name && !self.connections.contains(peer) &&
+                    !self.candidates.contains_key(peer)
             })
             .cloned()
             .collect()
@@ -424,9 +436,9 @@ impl Node {
                 if Self::could_be_added(node, block) {
                     trace!("{}: voting to add {} to: {:?}", self, node, block);
                     votes.push(Vote {
-                                   from: block.clone(),
-                                   to: block.add_node(node),
-                               });
+                        from: block.clone(),
+                        to: block.add_node(node),
+                    });
                 }
             }
         }
@@ -435,28 +447,35 @@ impl Node {
             for node in self.nodes_to_drop(&block) {
                 trace!("{}: voting to remove {} from: {:?}", self, node, block);
                 votes.push(Vote {
-                               from: block.clone(),
-                               to: block.remove_node(node),
-                           });
+                    from: block.clone(),
+                    to: block.remove_node(node),
+                });
             }
         }
 
         for vote in split_blocks(&self.current_blocks, self.our_name, self.min_split_size()) {
-            trace!("{}: voting to split from: {:?} to: {:?}",
-                   self,
-                   vote.from,
-                   vote.to);
+            trace!(
+                "{}: voting to split from: {:?} to: {:?}",
+                self,
+                vote.from,
+                vote.to
+            );
             votes.push(vote);
         }
 
-        for vote in merge_blocks(&self.current_blocks,
-                                 &self.connections,
-                                 self.our_name,
-                                 self.params.min_section_size) {
-            trace!("{}: voting to merge from: {:?} to: {:?}",
-                   self,
-                   vote.from,
-                   vote.to);
+        for vote in merge_blocks(
+            &self.current_blocks,
+            &self.connections,
+            self.our_name,
+            self.params.min_section_size,
+        )
+        {
+            trace!(
+                "{}: voting to merge from: {:?} to: {:?}",
+                self,
+                vote.from,
+                vote.to
+            );
             votes.push(vote);
         }
 
@@ -547,7 +566,10 @@ impl Node {
                 debug!("{}: received join message for: {}", self, joining_node);
 
                 // Mark the peer as having joined so that we vote to keep adding it.
-                self.candidates.insert(joining_node, Candidate { step_added: step });
+                self.candidates.insert(
+                    joining_node,
+                    Candidate { step_added: step },
+                );
                 self.connections.insert(joining_node);
 
                 let connect_msg = Message {
@@ -565,10 +587,12 @@ impl Node {
                 vec![]
             }
             VoteAgreedMsg((vote, voters)) => {
-                debug!("{}: received agreement for {:?} from {}",
-                       self,
-                       vote,
-                       message.sender);
+                debug!(
+                    "{}: received agreement for {:?} from {}",
+                    self,
+                    vote,
+                    message.sender
+                );
                 self.add_vote(vote, voters);
                 vec![]
             }
@@ -580,9 +604,11 @@ impl Node {
                 vec![]
             }
             BootstrapMsg(vote_counts) => {
-                debug!("{}: applying bootstrap message from {}",
-                       self,
-                       message.sender);
+                debug!(
+                    "{}: applying bootstrap message from {}",
+                    self,
+                    message.sender
+                );
                 self.apply_bootstrap_msg(vote_counts);
                 vec![]
             }
@@ -598,11 +624,13 @@ impl Node {
                 if !self.connect_requests.contains(&message.sender) {
                     trace!("{}: connecting back to {}", self, message.sender);
                     self.connect_requests.insert(message.sender);
-                    vec![Message {
-                        sender: self.our_name,
-                        recipient: message.sender,
-                        content: MessageContent::Connect,
-                    }]
+                    vec![
+                        Message {
+                            sender: self.our_name,
+                            recipient: message.sender,
+                            content: MessageContent::Connect,
+                        },
+                    ]
                 } else {
                     vec![]
                 }

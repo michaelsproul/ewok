@@ -28,19 +28,28 @@ pub enum MessageContent {
     /// See handling in node.rs.
     Connect,
     /// ^See above.
-    Disconnect
+    Disconnect,
 }
 
 impl MessageContent {
     pub fn recipients(&self, current_blocks: &CurrentBlocks) -> BTreeSet<Name> {
         match *self {
             // Send votes only to our section.
-            VoteMsg(Vote { ref from, ref to }) => {
-                &from.members | &to.members
+            VoteMsg(Vote { ref from, ref to }) => &from.members | &to.members,
+            // Send agreed votes only to neighbours of from and to
+            VoteAgreedMsg((Vote { ref from, ref to }, _)) => {
+                current_blocks
+                    .into_iter()
+                    .filter(|b| {
+                        b.prefix.is_neighbour(&from.prefix) || b.prefix.is_neighbour(&to.prefix)
+                    })
+                    .flat_map(|block| block.members.iter().cloned())
+                    .collect()
             }
             // Send anything else to all connected neighbours.
             _ => {
-                current_blocks.iter()
+                current_blocks
+                    .iter()
                     .flat_map(|block| block.members.iter().cloned())
                     .collect()
             }

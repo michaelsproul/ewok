@@ -22,7 +22,7 @@ impl Block {
             }
         } else {
             self.prefix.is_compatible(&other.prefix) &&
-            self.prefix.bit_count() < other.prefix.bit_count()
+                self.prefix.bit_count() < other.prefix.bit_count()
         }
     }
 }
@@ -41,11 +41,7 @@ pub type VoteCounts = BTreeMap<Rc<Block>, BTreeMap<Rc<Block>, BTreeSet<Name>>>;
 
 #[cfg(feature = "fast")]
 fn abs_diff(x: usize, y: usize) -> usize {
-    if x >= y {
-        x - y
-    } else {
-        y - x
-    }
+    if x >= y { x - y } else { y - x }
 }
 
 impl Block {
@@ -94,23 +90,20 @@ impl Block {
 
         // Add/remove case.
         if self.prefix == other.prefix {
-            self.members
-                .symmetric_difference(&other.members)
-                .count() == 1
+            self.members.symmetric_difference(&other.members).count() == 1
         }
         // Split case.
         else if self.prefix.popped() == other.prefix {
-            let filtered = other
-                .members
-                .iter()
-                .filter(|name| self.prefix.matches(**name));
+            let filtered = other.members.iter().filter(
+                |name| self.prefix.matches(**name),
+            );
             self.members.iter().eq(filtered)
         }
         // Merge case
         else if other.prefix.popped() == self.prefix {
-            let filtered = self.members
-                .iter()
-                .filter(|name| other.prefix.matches(**name));
+            let filtered = self.members.iter().filter(
+                |name| other.prefix.matches(**name),
+            );
             other.members.iter().eq(filtered)
         } else {
             false
@@ -151,10 +144,11 @@ impl Block {
 /// Return value:
 /// Set of votes that become valid as a result of `new_vote`. The `to` blocks of these
 /// votes are the new valid blocks that should be added to `valid_blocks`.
-pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
-                        vote_counts: &VoteCounts,
-                        new_votes: BTreeSet<Vote>)
-                        -> Vec<(Vote, BTreeSet<Name>)> {
+pub fn new_valid_blocks(
+    valid_blocks: &ValidBlocks,
+    vote_counts: &VoteCounts,
+    new_votes: BTreeSet<Vote>,
+) -> Vec<(Vote, BTreeSet<Name>)> {
     // Set of valid blocks to branch out from.
     // Stored as a set of votes where the frontier blocks are the "to" component,
     // and the nodes that voted for them are held alongside (a little hacky).
@@ -198,24 +192,25 @@ pub fn new_valid_blocks(valid_blocks: &ValidBlocks,
 /// Return all votes for blocks that succeed the given block.
 ///
 /// a succeeds b == b witnesses a.
-fn successors<'a>(vote_counts: &'a VoteCounts,
-                  from: &'a Rc<Block>)
-                  -> Box<Iterator<Item = (Vote, BTreeSet<Name>)> + 'a> {
+fn successors<'a>(
+    vote_counts: &'a VoteCounts,
+    from: &'a Rc<Block>,
+) -> Box<Iterator<Item = (Vote, BTreeSet<Name>)> + 'a> {
     let iter = vote_counts
         .get(from)
         .into_iter()
         .flat_map(|inner_map| inner_map.iter())
         .filter(move |&(succ, _)| {
-                    succ.prefix.is_neighbour(&from.prefix) || succ.is_admissible_after(from)
-                })
+            succ.prefix.is_neighbour(&from.prefix) || succ.is_admissible_after(from)
+        })
         .filter(move |&(_, voters)| is_quorum_of(voters, &from.members))
         .map(move |(succ, voters)| {
-                 let vote = Vote {
-                     from: from.clone(),
-                     to: succ.clone(),
-                 };
-                 (vote, voters.clone())
-             });
+            let vote = Vote {
+                from: from.clone(),
+                to: succ.clone(),
+            };
+            (vote, voters.clone())
+        });
 
     Box::new(iter)
 }
@@ -266,12 +261,11 @@ pub fn is_quorum_of(voters: &BTreeSet<Name>, members: &BTreeSet<Name>) -> bool {
 }
 
 /// Blocks that we can legitimately vote on successors for, because we are part of them.
-pub fn our_blocks<'a>(blocks: &'a BTreeSet<Rc<Block>>,
-                      our_name: Name)
-                      -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
-    let ours = blocks
-        .iter()
-        .filter(move |b| b.members.contains(&our_name));
+pub fn our_blocks<'a>(
+    blocks: &'a BTreeSet<Rc<Block>>,
+    our_name: Name,
+) -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
+    let ours = blocks.iter().filter(move |b| b.members.contains(&our_name));
     Box::new(ours)
 }
 
@@ -281,19 +275,21 @@ pub fn our_prefixes(blocks: &BTreeSet<Rc<Block>>, our_name: Name) -> BTreeSet<Pr
 }
 
 /// Blocks that match our name, but that we are not necessarily a part of.
-pub fn section_blocks<'a>(blocks: &'a BTreeSet<Rc<Block>>,
-                          our_name: Name)
-                          -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
-    let section_blocks = blocks
-        .iter()
-        .filter(move |block| block.prefix.matches(our_name));
+pub fn section_blocks<'a>(
+    blocks: &'a BTreeSet<Rc<Block>>,
+    our_name: Name,
+) -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
+    let section_blocks = blocks.iter().filter(
+        move |block| block.prefix.matches(our_name),
+    );
     Box::new(section_blocks)
 }
 
 /// Blocks that contain a given prefix.
-pub fn blocks_for_prefix<'a>(blocks: &'a BTreeSet<Rc<Block>>,
-                             prefix: Prefix)
-                             -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
+pub fn blocks_for_prefix<'a>(
+    blocks: &'a BTreeSet<Rc<Block>>,
+    prefix: Prefix,
+) -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
     let result = blocks.iter().filter(move |&b| b.prefix == prefix);
     Box::new(result)
 }
@@ -305,8 +301,7 @@ pub fn blocks_for_prefix<'a>(blocks: &'a BTreeSet<Rc<Block>>,
 fn predecessor<'a>(
     block: &Rc<Block>,
     votes: &'a VoteCounts,
-) -> Option<(&'a Rc<Block>, Vote, BTreeSet<Name>)>
-{
+) -> Option<(&'a Rc<Block>, Vote, BTreeSet<Name>)> {
     for (from, map) in votes {
         for (to, voters) in map {
             if to == block && is_quorum_of(voters, &from.members) {
@@ -336,7 +331,10 @@ pub fn chain_segment(block: &Rc<Block>, votes: &VoteCounts) -> BTreeSet<(Vote, B
                 oldest_block = predecessor;
             }
             None => {
-                warn!("WARNING: couldn't find a predecessor for: {:?}", oldest_block);
+                warn!(
+                    "WARNING: couldn't find a predecessor for: {:?}",
+                    oldest_block
+                );
                 break;
             }
         }
@@ -345,7 +343,6 @@ pub fn chain_segment(block: &Rc<Block>, votes: &VoteCounts) -> BTreeSet<(Vote, B
     segment_votes
 }
 
-/* FIXME: re-enable tests
 #[cfg(test)]
 mod test {
     use super::*;
@@ -356,7 +353,8 @@ mod test {
 
     #[test]
     fn covering() {
-        let valid_blocks = btreeset![
+        let valid_blocks =
+            btreeset![
             Rc::new(Block {
                 prefix: Prefix::empty(),
                 version: 0,
@@ -369,7 +367,8 @@ mod test {
             }),
         ];
 
-        let expected_current = btreeset![
+        let expected_current =
+            btreeset![
             Rc::new(Block {
                 prefix: Prefix::empty(),
                 version: 0,
@@ -386,25 +385,26 @@ mod test {
     #[test]
     fn segment() {
         let b1_members = btreeset!{ Name(0), Name(1), Name(2), Name(3), Name(4) };
-        let b1 = Block {
+        let b1 = Rc::new(Block {
             prefix: Prefix::empty(),
             version: 0,
             members: b1_members.clone(),
-        };
+        });
         let b2_members = btreeset!{ Name(0), Name(1), Name(2) };
-        let b2 = Block {
+        let b2 = Rc::new(Block {
             prefix: Prefix::short(1, 0),
             version: 1,
             members: b2_members.clone(),
-        };
+        });
         let b3_members = &b2_members | &btreeset!{ Name(5) };
-        let b3 = Block {
+        let b3 = Rc::new(Block {
             prefix: Prefix::short(1, 0),
             version: 2,
             members: b3_members.clone(),
-        };
+        });
 
-        let votes = btreemap! {
+        let votes =
+            btreemap! {
             b1.clone() => btreemap! {
                 b2.clone() => b1_members.clone(),
             },
@@ -415,13 +415,19 @@ mod test {
 
         let segment_votes = chain_segment(&b3, &votes);
 
-        let v12 = Vote { from: b1.clone(), to: b2.clone() };
-        let v23 = Vote { from: b2.clone(), to: b3.clone() };
-        let expected = btreeset! {
+        let v12 = Vote {
+            from: b1.clone(),
+            to: b2.clone(),
+        };
+        let v23 = Vote {
+            from: b2.clone(),
+            to: b3.clone(),
+        };
+        let expected =
+            btreeset! {
             (v12, b1_members),
             (v23, b2_members),
         };
         assert_eq!(segment_votes, expected);
     }
 }
-*/

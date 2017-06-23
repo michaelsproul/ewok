@@ -32,19 +32,31 @@ pub enum MessageContent {
 }
 
 impl MessageContent {
-    pub fn recipients(&self, current_blocks: &CurrentBlocks) -> BTreeSet<Name> {
+    pub fn recipients(&self, current_blocks: &CurrentBlocks, our_name: Name) -> BTreeSet<Name> {
         match *self {
             // Send votes only to our section.
             VoteMsg(Vote { ref from, ref to }) => &from.members | &to.members,
             // Send agreed votes only to neighbours of from and to
             VoteAgreedMsg((Vote { ref from, ref to }, _)) => {
-                current_blocks
-                    .into_iter()
-                    .filter(|b| {
-                        b.prefix.is_neighbour(&from.prefix) || b.prefix.is_neighbour(&to.prefix)
-                    })
-                    .flat_map(|block| block.members.iter().cloned())
-                    .collect()
+                if from.members.contains(&our_name) {
+                    current_blocks
+                        .into_iter()
+                        .filter(|b| {
+                            b.prefix.is_neighbour(&from.prefix) || b.prefix.is_neighbour(&to.prefix)
+                        })
+                        .flat_map(|block| block.members.iter().cloned())
+                        .collect()
+                } else {
+                    current_blocks
+                        .into_iter()
+                        .filter(|b| {
+                            b.prefix.is_neighbour(&to.prefix) &&
+                                !b.prefix.is_neighbour(&from.prefix) &&
+                                b.prefix != from.prefix
+                        })
+                        .flat_map(|block| block.members.iter().cloned())
+                        .collect()
+                }
             }
             // Send anything else to all connected neighbours.
             _ => {

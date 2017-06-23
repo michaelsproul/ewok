@@ -351,7 +351,7 @@ impl Node {
     pub fn broadcast(&self, msgs: Vec<MessageContent>, step: u64) -> Vec<Message> {
         msgs.into_iter()
             .flat_map(move |content| {
-                let mut recipients = content.recipients(&self.current_blocks);
+                let mut recipients = content.recipients(&self.current_blocks, self.our_name);
                 recipients.extend(self.nodes_to_add(step));
                 recipients.remove(&self.our_name);
 

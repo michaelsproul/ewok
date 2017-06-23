@@ -46,24 +46,21 @@ impl Network {
         self.messages
             .values_mut()
             .flat_map(|messages| {
-                          Self::receive_from_conn(messages,
-                                                  prob_deliver,
-                                                  max_delay,
-                                                  start_step,
-                                                  step)
-                      })
+                Self::receive_from_conn(messages, prob_deliver, max_delay, start_step, step)
+            })
             .collect()
     }
 
     /// Get messages delivered on a single connection at a given step.
     ///
     /// `conn_messages`: the messages for a single connection as contained in `self.messages`.
-    fn receive_from_conn(conn_messages: &mut BTreeMap<u64, Vec<Message>>,
-                         prob_deliver: f64,
-                         max_delay: u64,
-                         start_step: u64,
-                         end_step: u64)
-                         -> Vec<Message> {
+    fn receive_from_conn(
+        conn_messages: &mut BTreeMap<u64, Vec<Message>>,
+        prob_deliver: f64,
+        max_delay: u64,
+        start_step: u64,
+        end_step: u64,
+    ) -> Vec<Message> {
         let mut all_deliver = vec![];
 
         // Check that old messages which should have been delivered, have been.
@@ -76,14 +73,11 @@ impl Network {
         for (step_sent, messages) in conn_messages.range_mut(start_step..end_step) {
             // Partition randomly based on p, whilst also delivering any messages
             // which were sent at start step.
-            let (deliver, leave) = messages
-                .drain(..)
-                .partition(|_| {
-                               let deliver_random = do_with_probability(prob_deliver);
-                               let force_deliver = *step_sent == start_step &&
-                                                   end_step >= max_delay;
-                               force_deliver || deliver_random
-                           });
+            let (deliver, leave) = messages.drain(..).partition(|_| {
+                let deliver_random = do_with_probability(prob_deliver);
+                let force_deliver = *step_sent == start_step && end_step >= max_delay;
+                force_deliver || deliver_random
+            });
 
             all_deliver.extend(deliver);
             *messages = leave;
@@ -117,10 +111,9 @@ impl Network {
 
     /// Whether the message/event queue is empty.
     pub fn queue_is_empty(&self) -> bool {
-        self.messages
-            .values()
-            .flat_map(BTreeMap::values)
-            .all(Vec::is_empty)
+        self.messages.values().flat_map(BTreeMap::values).all(
+            Vec::is_empty,
+        )
     }
 
     /// Get the number of messages still in queue

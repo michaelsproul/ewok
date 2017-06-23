@@ -85,23 +85,27 @@ pub struct Simulation {
 impl Simulation {
     /// Create a new simulation with a single seed node.
     pub fn new(params: SimulationParams, node_params: NodeParams) -> Self {
-        let single_node_genesis = btreemap! {
+        let single_node_genesis =
+            btreemap! {
             Prefix::empty() => 1
         };
-        Self::new_from(single_node_genesis,
-                       EventSchedule::empty(),
-                       params,
-                       node_params)
+        Self::new_from(
+            single_node_genesis,
+            EventSchedule::empty(),
+            params,
+            node_params,
+        )
     }
 
     /// Create a new simulation with sections whose prefixes and sizes are specified by `sections`.
     ///
     /// Note: the `num_nodes` parameter is entirely ignored by this constructor.
-    pub fn new_from(sections: BTreeMap<Prefix, usize>,
-                    event_schedule: EventSchedule,
-                    params: SimulationParams,
-                    node_params: NodeParams)
-                    -> Self {
+    pub fn new_from(
+        sections: BTreeMap<Prefix, usize>,
+        event_schedule: EventSchedule,
+        params: SimulationParams,
+        node_params: NodeParams,
+    ) -> Self {
         let (nodes, genesis_set) = generate_network(&sections, &node_params);
         let network = Network::new(params.max_delay);
         let random_events = RandomEvents::new(params.clone(), node_params.clone());
@@ -137,7 +141,9 @@ impl Simulation {
         let disconnected = mem::replace(&mut self.disconnected, BTreeSet::new());
         self.disconnected = disconnected
             .into_iter()
-            .filter(|pair| pair.lower() != leaving_node && pair.higher() != leaving_node)
+            .filter(|pair| {
+                pair.lower() != leaving_node && pair.higher() != leaving_node
+            })
             .collect();
     }
 
@@ -159,24 +165,29 @@ impl Simulation {
             }
             pair = DisconnectedPair::new(*rnd_pair[0].0, *rnd_pair[1].0);
             if !self.nodes[&pair.lower()].is_disconnected_from(&pair.higher()) &&
-               !self.nodes[&pair.higher()].is_disconnected_from(&pair.lower()) {
+                !self.nodes[&pair.higher()].is_disconnected_from(&pair.lower())
+            {
                 break;
             }
         }
 
-        debug!("Node({}) and Node({}) disconnecting from each other...",
-               pair.lower(),
-               pair.higher());
-        let messages = vec![Message {
-                                sender: pair.lower(),
-                                recipient: pair.higher(),
-                                content: Disconnect,
-                            },
-                            Message {
-                                sender: pair.higher(),
-                                recipient: pair.lower(),
-                                content: Disconnect,
-                            }];
+        debug!(
+            "Node({}) and Node({}) disconnecting from each other...",
+            pair.lower(),
+            pair.higher()
+        );
+        let messages = vec![
+            Message {
+                sender: pair.lower(),
+                recipient: pair.higher(),
+                content: Disconnect,
+            },
+            Message {
+                sender: pair.higher(),
+                recipient: pair.lower(),
+                content: Disconnect,
+            },
+        ];
 
         self.disconnected.insert(pair);
         messages
@@ -190,21 +201,24 @@ impl Simulation {
         for pair in disconnected {
             // Ensure both have realised they're disconnected.
             if self.nodes[&pair.lower()].is_disconnected_from(&pair.higher()) &&
-               self.nodes[&pair.higher()].is_disconnected_from(&pair.lower()) &&
-               do_with_probability(self.params.prob_reconnect(self.phase)) {
-                debug!("Node({}) and Node({}) reconnecting to each other...",
-                       pair.lower(),
-                       pair.higher());
+                self.nodes[&pair.higher()].is_disconnected_from(&pair.lower()) &&
+                do_with_probability(self.params.prob_reconnect(self.phase))
+            {
+                debug!(
+                    "Node({}) and Node({}) reconnecting to each other...",
+                    pair.lower(),
+                    pair.higher()
+                );
                 messages.push(Message {
-                                  sender: pair.lower(),
-                                  recipient: pair.higher(),
-                                  content: Connect,
-                              });
+                    sender: pair.lower(),
+                    recipient: pair.higher(),
+                    content: Connect,
+                });
                 messages.push(Message {
-                                  sender: pair.higher(),
-                                  recipient: pair.lower(),
-                                  content: Connect,
-                              });
+                    sender: pair.higher(),
+                    recipient: pair.lower(),
+                    content: Connect,
+                });
             } else {
                 self.disconnected.insert(pair);
             }
@@ -262,15 +276,19 @@ impl Simulation {
                 } else {
                     no_op_step_count = 0;
                 }
-                info!("-- step {} ({:?}) {} nodes --",
-                      step,
-                      self.phase,
-                      self.nodes.len());
+                info!(
+                    "-- step {} ({:?}) {} nodes --",
+                    step,
+                    self.phase,
+                    self.nodes.len()
+                );
             } else {
-                info!("-- step {} ({:?}) {} nodes --",
-                      step,
-                      self.phase,
-                      self.nodes.len());
+                info!(
+                    "-- step {} ({:?}) {} nodes --",
+                    step,
+                    self.phase,
+                    self.nodes.len()
+                );
                 self.generate_events(step);
             }
 
@@ -315,8 +333,10 @@ impl Simulation {
 
             self.phase = self.phase_for_next_step(step);
 
-            debug!("- {} messages still in queue. -",
-                   self.network.messages_in_queue());
+            debug!(
+                "- {} messages still in queue. -",
+                self.network.messages_in_queue()
+            );
         }
 
         debug!("-- final node states --");
@@ -324,10 +344,12 @@ impl Simulation {
             debug!("{:?}", node);
         }
 
-        assert!(no_op_step_count > self.node_params.join_timeout,
-                "Votes were still being sent and received after {} extra steps during which no \
+        assert!(
+            no_op_step_count > self.node_params.join_timeout,
+            "Votes were still being sent and received after {} extra steps during which no \
                  churn was triggered.",
-                max_extra_steps);
+            max_extra_steps
+        );
 
         check_consistency(&self.nodes, self.node_params.min_section_size as usize)
             .map_err(|_| seed())

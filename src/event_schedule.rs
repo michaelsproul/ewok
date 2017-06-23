@@ -21,9 +21,6 @@ impl EventSchedule {
 
     /// Fetch events occuring at the given step.
     pub fn get_events(&self, step: u64) -> Vec<Event> {
-        self.schedule
-            .get(&step)
-            .cloned()
-            .unwrap_or_else(Vec::new)
+        self.schedule.get(&step).cloned().unwrap_or_else(Vec::new)
     }
 }

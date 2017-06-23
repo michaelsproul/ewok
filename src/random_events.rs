@@ -15,7 +15,10 @@ pub struct RandomEvents {
 
 impl RandomEvents {
     pub fn new(params: SimulationParams, node_params: NodeParams) -> Self {
-        RandomEvents { params , node_params }
+        RandomEvents {
+            params,
+            node_params,
+        }
     }
 
     pub fn get_events(&self, phase: Phase, nodes: &BTreeMap<Name, Node>) -> Vec<Event> {
@@ -58,10 +61,16 @@ impl RandomEvents {
                     .intersection(&names_sorted)
                     .count();
                 // Don't sink below a quorum of our current block, OR the min section size.
-                let min_nodes = quorum(cmp::max(our_current_block.members.len(),
-                                                self.node_params.min_section_size));
+                let min_nodes = quorum(cmp::max(
+                    our_current_block.members.len(),
+                    self.node_params.min_section_size,
+                ));
                 if num_live >= min_nodes + 2 {
-                    trace!("Node({}): removed from section with {} live nodes", name, num_live);
+                    trace!(
+                        "Node({}): removed from section with {} live nodes",
+                        name,
+                        num_live
+                    );
                     return Some(name);
                 }
             }

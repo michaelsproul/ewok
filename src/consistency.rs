@@ -9,9 +9,7 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>, min_section_size: usize) 
 
     for node in nodes.values() {
         for block in &node.current_blocks {
-            let section_versions = sections
-                .entry(block.prefix)
-                .or_insert_with(BTreeSet::new);
+            let section_versions = sections.entry(block.prefix).or_insert_with(BTreeSet::new);
             section_versions.insert(block.clone());
         }
     }
@@ -21,14 +19,17 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>, min_section_size: usize) 
     for (prefix, versions) in &sections {
         if versions.len() > 1 {
             failed = true;
-            error!("multiple versions of {:?}, they are: {:#?}",
-                   prefix,
-                   versions);
+            error!(
+                "multiple versions of {:?}, they are: {:#?}",
+                prefix,
+                versions
+            );
         } else {
             let members = &versions.iter().next().unwrap().members;
             // Allow a quorum if we have only one section, otherwise require `min_section_size`.
             if (sections.len() == 1 && members.len() * 2 <= min_section_size) ||
-               (sections.len() > 1 && members.len() < min_section_size) {
+                (sections.len() > 1 && members.len() < min_section_size)
+            {
                 failed = true;
                 error!("section too small: {:?} with members {:?}", prefix, members);
             }
@@ -37,9 +38,11 @@ pub fn check_consistency(nodes: &BTreeMap<Name, Node>, min_section_size: usize) 
             for member in members {
                 if !nodes.contains_key(member) {
                     failed = true;
-                    error!("node {:?} is dead but appears in the block for {:?}",
-                           member,
-                           prefix);
+                    error!(
+                        "node {:?} is dead but appears in the block for {:?}",
+                        member,
+                        prefix
+                    );
                 }
             }
         }

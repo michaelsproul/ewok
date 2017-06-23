@@ -4,28 +4,31 @@ use std::collections::BTreeSet;
 use std::cmp;
 use std::rc::Rc;
 
-pub fn merge_blocks(current_blocks: &CurrentBlocks,
-                    connections: &BTreeSet<Name>,
-                    our_name: Name,
-                    min_section_size: usize)
-                    -> Vec<Vote> {
+pub fn merge_blocks(
+    current_blocks: &CurrentBlocks,
+    connections: &BTreeSet<Name>,
+    our_name: Name,
+    min_section_size: usize,
+) -> Vec<Vote> {
     let mut result = merge_rule(current_blocks, our_name, min_section_size);
     result.extend(force_merge_rule(current_blocks, connections, our_name));
     result.into_iter().collect()
 }
 
-fn force_merge_rule(current_blocks: &CurrentBlocks,
-                    connections: &BTreeSet<Name>,
-                    our_name: Name)
-                    -> BTreeSet<Vote> {
+fn force_merge_rule(
+    current_blocks: &CurrentBlocks,
+    connections: &BTreeSet<Name>,
+    our_name: Name,
+) -> BTreeSet<Vote> {
     let mut votes = BTreeSet::new();
-    for candidate in current_blocks
-            .iter()
-            .filter(|&b| lost_quorum(b, connections)) {
+    for candidate in current_blocks.iter().filter(
+        |&b| lost_quorum(b, connections),
+    )
+    {
         for our_block in our_blocks(current_blocks, our_name).filter(|b| {
-                                                                         b.prefix.sibling() ==
-                                                                         Some(candidate.prefix)
-                                                                     }) {
+            b.prefix.sibling() == Some(candidate.prefix)
+        })
+        {
             let target = merged_block(candidate, our_block);
             let vote = Vote {
                 from: our_block.clone(),
@@ -46,10 +49,11 @@ fn lost_quorum(block: &Block, connections: &BTreeSet<Name>) -> bool {
     num_active <= block.members.len() / 2
 }
 
-fn merge_rule(current_blocks: &CurrentBlocks,
-              our_name: Name,
-              min_section_size: usize)
-              -> BTreeSet<Vote> {
+fn merge_rule(
+    current_blocks: &CurrentBlocks,
+    our_name: Name,
+    min_section_size: usize,
+) -> BTreeSet<Vote> {
     // find blocks that describe sections below threshold
     let candidates = find_small_blocks(current_blocks, min_section_size);
     let mut votes = BTreeSet::new();
@@ -88,14 +92,13 @@ fn merge_rule(current_blocks: &CurrentBlocks,
     votes
 }
 
-fn find_small_blocks<'a>(current_blocks: &'a CurrentBlocks,
-                         min_section_size: usize)
-                         -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
-    Box::new(current_blocks
-                 .iter()
-                 .filter(move |&b| {
-                             b.prefix.bit_count() > 0 && b.members.len() < min_section_size
-                         }))
+fn find_small_blocks<'a>(
+    current_blocks: &'a CurrentBlocks,
+    min_section_size: usize,
+) -> Box<Iterator<Item = &'a Rc<Block>> + 'a> {
+    Box::new(current_blocks.iter().filter(move |&b| {
+        b.prefix.bit_count() > 0 && b.members.len() < min_section_size
+    }))
 }
 
 fn merged_block(b0: &Rc<Block>, b1: &Rc<Block>) -> Rc<Block> {

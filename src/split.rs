@@ -3,10 +3,11 @@ use block::{Block, Vote, CurrentBlocks, our_blocks};
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
-pub fn split_blocks(current_blocks: &CurrentBlocks,
-                    our_name: Name,
-                    min_split_size: usize)
-                    -> Vec<Vote> {
+pub fn split_blocks(
+    current_blocks: &CurrentBlocks,
+    our_name: Name,
+    min_split_size: usize,
+) -> Vec<Vote> {
     our_blocks(current_blocks, our_name)
         .flat_map(|block| split_block(block, current_blocks, min_split_size))
         .collect()
@@ -14,16 +15,18 @@ pub fn split_blocks(current_blocks: &CurrentBlocks,
 
 /// If a section as described by `block` can split, return the two blocks it splits into.
 /// rule:Split
-fn split_block(block: &Rc<Block>, current_blocks: &CurrentBlocks, min_split_size: usize) -> Vec<Vote> {
+fn split_block(
+    block: &Rc<Block>,
+    current_blocks: &CurrentBlocks,
+    min_split_size: usize,
+) -> Vec<Vote> {
     let p0 = block.prefix.pushed(false);
     let p1 = block.prefix.pushed(true);
-    let (s0, s1): (BTreeSet<_>, _) = block
-        .members
-        .iter()
-        .partition(|name| p0.matches(**name));
+    let (s0, s1): (BTreeSet<_>, _) = block.members.iter().partition(|name| p0.matches(**name));
 
     if s0.len() >= min_split_size && s1.len() >= min_split_size &&
-       neighbours_ok(block, current_blocks, min_split_size) {
+        neighbours_ok(block, current_blocks, min_split_size)
+    {
         let b0 = Block {
             prefix: p0,
             version: block.version + 1,
@@ -55,9 +58,7 @@ fn neighbours_ok(block: &Rc<Block>, current_blocks: &CurrentBlocks, min_split_si
     current_blocks
         .iter()
         .filter(move |other_block| {
-                    other_block
-                        .prefix
-                        .is_sibling_of_ancestor_of(&block.prefix)
-                })
+            other_block.prefix.is_sibling_of_ancestor_of(&block.prefix)
+        })
         .all(|other_block| other_block.members.len() >= min_split_size)
 }

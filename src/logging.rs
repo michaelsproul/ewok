@@ -9,10 +9,9 @@ pub fn init_logging() {
         let format = |record: &LogRecord| format!("{}", record.args());
 
         let mut builder = LogBuilder::new();
-        builder
-            .format(format)
-            .target(LogTarget::Stdout)
-            .parse(&rust_log);
+        builder.format(format).target(LogTarget::Stdout).parse(
+            &rust_log,
+        );
 
         if builder.init().is_err() {
             // already initialised

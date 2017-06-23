@@ -330,7 +330,6 @@ impl Node {
         let new_valid_votes = self.update_valid_blocks();
 
         // Broadcast vote agreement messages before pruning the current block set.
-        let our_name = self.our_name;
         let mut messages = self.broadcast(
             new_valid_votes.into_iter().map(VoteAgreedMsg).collect(),
             step,

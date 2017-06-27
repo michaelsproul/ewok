@@ -7,6 +7,7 @@ extern crate log;
 extern crate env_logger;
 
 pub mod block;
+pub mod blocks;
 pub mod consistency;
 pub mod event;
 pub mod event_schedule;

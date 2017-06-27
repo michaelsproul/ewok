@@ -1,7 +1,7 @@
 //! Functions for generating sections of a certain size.
 
-use std::rc::Rc;
-use block::{Block, CurrentBlocks};
+use block::{Block, BlockId};
+use blocks::{Blocks, CurrentBlocks};
 use name::{Name, Prefix};
 use node::Node;
 use params::NodeParams;
@@ -13,9 +13,10 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 /// `sections`: map from prefix to desired size for that section.
 pub fn generate_network(
+    blocks: &mut Blocks,
     sections: &BTreeMap<Prefix, usize>,
     params: &NodeParams,
-) -> (BTreeMap<Name, Node>, CurrentBlocks) {
+) -> (BTreeMap<Name, Node>, BTreeSet<BlockId>) {
     // Check that the supplied prefixes describe a whole network.
     assert!(
         Prefix::empty().is_covered_by(sections.keys()),
@@ -29,7 +30,10 @@ pub fn generate_network(
         nodes_by_section.insert(*prefix, node_names);
     }
 
-    let current_blocks = construct_blocks(nodes_by_section.clone());
+    let current_blocks: CurrentBlocks = construct_blocks(nodes_by_section.clone())
+        .into_iter()
+        .map(|b| blocks.insert(b))
+        .collect();
 
     let nodes = nodes_by_section
         .into_iter()
@@ -37,7 +41,7 @@ pub fn generate_network(
         .map(|name| {
             (
                 name,
-                Node::new(name, current_blocks.clone(), params.clone(), 0),
+                Node::new(name, blocks, current_blocks.clone(), params.clone(), 0),
             )
         })
         .collect();
@@ -46,15 +50,15 @@ pub fn generate_network(
 }
 
 /// Construct a set of blocks to describe the given sections.
-fn construct_blocks(nodes: BTreeMap<Prefix, BTreeSet<Name>>) -> CurrentBlocks {
+fn construct_blocks(nodes: BTreeMap<Prefix, BTreeSet<Name>>) -> BTreeSet<Block> {
     nodes
         .into_iter()
         .map(|(prefix, members)| {
-            Rc::new(Block {
+            Block {
                 prefix,
                 members,
                 version: 0,
-            })
+            }
         })
         .collect()
 }

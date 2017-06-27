@@ -1,13 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
-use std::rc::Rc;
 
 use network::Network;
 use event::Event;
 use event_schedule::EventSchedule;
 use node::Node;
 use name::{Name, Prefix};
-use block::Block;
+use block::BlockId;
+use blocks::Blocks;
 use generate::generate_network;
 use consistency::check_consistency;
 use message::Message;
@@ -65,9 +65,10 @@ pub enum Phase {
 
 pub struct Simulation {
     nodes: BTreeMap<Name, Node>,
+    blocks: Blocks,
     network: Network,
     /// Set of blocks that all nodes start from (often just a single genesis block).
-    genesis_set: BTreeSet<Rc<Block>>,
+    genesis_set: BTreeSet<BlockId>,
     /// Parameters for the network and the simulation.
     params: SimulationParams,
     /// Parameters for nodes.
@@ -106,11 +107,13 @@ impl Simulation {
         params: SimulationParams,
         node_params: NodeParams,
     ) -> Self {
-        let (nodes, genesis_set) = generate_network(&sections, &node_params);
+        let mut blocks = Blocks::new();
+        let (nodes, genesis_set) = generate_network(&mut blocks, &sections, &node_params);
         let network = Network::new(params.max_delay);
         let random_events = RandomEvents::new(params.clone(), node_params.clone());
 
         Simulation {
+            blocks,
             nodes,
             genesis_set,
             network,
@@ -127,7 +130,7 @@ impl Simulation {
         // Make the node active, and let it build its way up from the genesis block(s).
         let genesis_set = self.genesis_set.clone();
         let params = self.node_params.clone();
-        let node = Node::new(joining, genesis_set, params, step);
+        let node = Node::new(joining, &self.blocks, genesis_set, params, step);
         self.nodes.insert(joining, node);
     }
 
@@ -230,7 +233,11 @@ impl Simulation {
     pub fn generate_events(&mut self, step: u64) {
         let mut events = vec![];
         events.extend(self.event_schedule.get_events(step));
-        events.extend(self.random_events.get_events(self.phase, &self.nodes));
+        events.extend(self.random_events.get_events(
+            self.phase,
+            &self.blocks,
+            &self.nodes,
+        ));
         trace!("events: {:?}", events);
 
         let mut ev_messages = vec![];
@@ -308,7 +315,7 @@ impl Simulation {
             // Shutdown nodes that have failed to join.
             let mut to_shutdown = BTreeSet::new();
             for (name, node) in &self.nodes {
-                if node.should_shutdown(step) {
+                if node.should_shutdown(&self.blocks, step) {
                     to_shutdown.insert(*name);
                 }
             }
@@ -322,13 +329,19 @@ impl Simulation {
 
             // Update node state (current blocks), and send new votes.
             for node in self.nodes.values_mut() {
-                match node.our_current_blocks().count() {
+                match node.our_current_blocks(&self.blocks).into_iter().count() {
                     0 => (),
-                    1 => node.check_conflicting_block_count(),
+                    1 => node.check_conflicting_block_count(&self.blocks),
                     count => panic!("{:?}\nhas {} current blocks for own section.", node, count),
                 }
-                self.network.send(step, node.update_state(step));
-                self.network.send(step, node.broadcast_new_votes(step));
+                self.network.send(
+                    step,
+                    node.update_state(&mut self.blocks, step),
+                );
+                self.network.send(
+                    step,
+                    node.broadcast_new_votes(&mut self.blocks, step),
+                );
             }
 
             self.phase = self.phase_for_next_step(step);
@@ -351,8 +364,11 @@ impl Simulation {
             max_extra_steps
         );
 
-        check_consistency(&self.nodes, self.node_params.min_section_size as usize)
-            .map_err(|_| seed())
+        check_consistency(
+            &self.blocks,
+            &self.nodes,
+            self.node_params.min_section_size as usize,
+        ).map_err(|_| seed())
     }
 
     fn phase_for_next_step(&self, step: u64) -> Phase {

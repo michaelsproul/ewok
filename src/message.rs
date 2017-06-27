@@ -1,4 +1,5 @@
-use block::{Vote, VoteCounts, CurrentBlocks};
+use block::Vote;
+use blocks::{VoteCounts, CurrentBlocks, Blocks};
 use name::Name;
 use self::MessageContent::*;
 use std::collections::BTreeSet;
@@ -32,14 +33,26 @@ pub enum MessageContent {
 }
 
 impl MessageContent {
-    pub fn recipients(&self, current_blocks: &CurrentBlocks, our_name: Name) -> BTreeSet<Name> {
+    pub fn recipients(
+        &self,
+        blocks: &Blocks,
+        current_blocks: &CurrentBlocks,
+        our_name: Name,
+    ) -> BTreeSet<Name> {
         match *self {
             // Send votes only to our section.
-            VoteMsg(Vote { ref from, ref to }) => &from.members | &to.members,
+            VoteMsg(Vote { ref from, ref to }) => {
+                let from = blocks.get(from).unwrap();
+                let to = blocks.get(to).unwrap();
+                &from.members | &to.members
+            }
             // Send agreed votes only to neighbours of from and to
             VoteAgreedMsg((Vote { ref from, ref to }, _)) => {
+                let from = blocks.get(from).unwrap();
+                let to = blocks.get(to).unwrap();
                 if from.members.contains(&our_name) {
-                    current_blocks
+                    blocks
+                        .block_contents(current_blocks)
                         .into_iter()
                         .filter(|b| {
                             b.prefix.is_neighbour(&from.prefix) || b.prefix.is_neighbour(&to.prefix)
@@ -47,7 +60,8 @@ impl MessageContent {
                         .flat_map(|block| block.members.iter().cloned())
                         .collect()
                 } else {
-                    current_blocks
+                    blocks
+                        .block_contents(current_blocks)
                         .into_iter()
                         .filter(|b| {
                             b.prefix.is_neighbour(&to.prefix) &&
@@ -60,8 +74,9 @@ impl MessageContent {
             }
             // Send anything else to all connected neighbours.
             _ => {
-                current_blocks
-                    .iter()
+                blocks
+                    .block_contents(current_blocks)
+                    .into_iter()
                     .flat_map(|block| block.members.iter().cloned())
                     .collect()
             }

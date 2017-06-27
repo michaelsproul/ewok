@@ -585,8 +585,11 @@ impl Node {
     /// Returns true if this node should shutdown because it has failed to join a section.
     pub fn should_shutdown(&self, blocks: &Blocks, step: u64) -> bool {
         let timeout_elapsed = step >= self.step_created + self.params.self_shutdown_timeout;
-        let no_blocks = self.our_current_blocks(blocks).len() == 0;
-        let insufficient_connections = self.connections.len() <= 2;
+
+        let (no_blocks, insufficient_connections) = match self.our_current_blocks(blocks).first() {
+            Some(block) => (false, self.connections.len() * 2 < block.members.len()),
+            None => (true, true),
+        };
 
         timeout_elapsed && (no_blocks || insufficient_connections)
     }

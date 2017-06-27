@@ -1,6 +1,7 @@
-use name::Name;
+use name::{Name, Prefix};
 use node::Node;
 use blocks::Blocks;
+use block::Block;
 use std::collections::{BTreeMap, BTreeSet};
 use itertools::Itertools;
 
@@ -9,8 +10,10 @@ pub fn check_consistency(
     blocks: &Blocks,
     nodes: &BTreeMap<Name, Node>,
     min_section_size: usize,
-) -> Result<(), ()> {
+) -> Result<BTreeMap<Prefix, Block>, ()> {
     let mut sections = btreemap!{};
+    let mut result = btreemap!{};
+    let mut failed = false;
 
     for node in nodes.values() {
         for block in blocks.block_contents(&node.current_blocks) {
@@ -19,41 +22,45 @@ pub fn check_consistency(
         }
     }
 
-    let mut failed = false;
+    let num_sections = sections.len();
 
-    for (prefix, versions) in &sections {
-        if versions.len() > 1 {
+    for (prefix, blocks) in sections {
+        if blocks.len() > 1 {
             failed = true;
             error!(
                 "multiple versions of {:?}, they are: {:#?}",
                 prefix,
-                versions
+                blocks
             );
-        } else {
-            let members = &versions.iter().next().unwrap().members;
-            // Allow a quorum if we have only one section, otherwise require `min_section_size`.
-            if (sections.len() == 1 && members.len() * 2 <= min_section_size) ||
-                (sections.len() > 1 && members.len() < min_section_size)
-            {
-                failed = true;
-                error!("section too small: {:?} with members {:?}", prefix, members);
-            }
+            continue;
+        }
 
-            // Check that all members are alive.
-            for member in members {
-                if !nodes.contains_key(member) {
-                    failed = true;
-                    error!(
-                        "node {:?} is dead but appears in the block for {:?}",
-                        member,
-                        prefix
-                    );
-                }
+        let block = blocks.into_iter().next().unwrap();
+
+        // Allow a quorum if we have only one section, otherwise require `min_section_size`.
+        if (num_sections == 1 && block.members.len() * 2 <= min_section_size) ||
+            (num_sections > 1 && block.members.len() < min_section_size)
+        {
+            failed = true;
+            error!("section too small: {:?} with members {:?}", prefix, block.members);
+        }
+
+        // Check that all members are alive.
+        for member in &block.members {
+            if !nodes.contains_key(member) {
+                failed = true;
+                error!(
+                    "node {:?} is dead but appears in the block for {:?}",
+                    member,
+                    prefix
+                );
             }
         }
+
+        result.insert(prefix, block);
     }
 
-    for (p1, p2) in sections.keys().tuple_combinations() {
+    for (p1, p2) in result.keys().tuple_combinations() {
         if p1.is_compatible(p2) {
             failed = true;
             error!("prefixes {:?} and {:?} overlap", p1, p2);
@@ -65,6 +72,6 @@ pub fn check_consistency(
         Err(())
     } else {
         info!("network is consistent!");
-        Ok(())
+        Ok(result)
     }
 }

@@ -6,7 +6,7 @@ use event::Event;
 use event_schedule::EventSchedule;
 use node::Node;
 use name::{Name, Prefix};
-use block::BlockId;
+use block::{Block, BlockId};
 use blocks::Blocks;
 use generate::generate_network;
 use consistency::check_consistency;
@@ -263,7 +263,7 @@ impl Simulation {
     }
 
     /// Run the simulation, returning Ok iff the network was consistent upon termination.
-    pub fn run(&mut self) -> Result<(), [u32; 4]> {
+    pub fn run(&mut self) -> Result<BTreeMap<Prefix, Block>, [u32; 4]> {
         let max_extra_steps = 1000;
         let mut no_op_step_count = 0;
 

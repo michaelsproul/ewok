@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
+use itertools::Itertools;
 
 use network::Network;
 use event::Event;
@@ -13,7 +14,7 @@ use consistency::check_consistency;
 use message::Message;
 use message::MessageContent::*;
 use params::{NodeParams, SimulationParams, quorum};
-use random::{sample, do_with_probability, seed};
+use random::{sample_single, do_with_probability, seed};
 use random_events::RandomEvents;
 use self::detail::DisconnectedPair;
 
@@ -160,19 +161,21 @@ impl Simulation {
 
     /// Kill a connection between a pair of nodes which aren't already disconnected.
     fn disconnect_pair(&mut self) -> Vec<Message> {
-        let mut pair;
-        loop {
-            let rnd_pair = sample(&self.nodes, 2);
-            if rnd_pair.len() != 2 {
-                return vec![];
+        let pair = {
+            let connected_pairs = self.nodes.keys()
+                .cloned()
+                .tuple_combinations()
+                .filter(|&(ref n1, ref n2)| {
+                    !self.nodes[n1].is_disconnected_from(n2) &&
+                    !self.nodes[n2].is_disconnected_from(n1)
+                })
+                .map(|(n1, n2)| DisconnectedPair::new(n1, n2));
+
+            match sample_single(connected_pairs) {
+                Some(x) => x,
+                None => return vec![],
             }
-            pair = DisconnectedPair::new(*rnd_pair[0].0, *rnd_pair[1].0);
-            if !self.nodes[&pair.lower()].is_disconnected_from(&pair.higher()) &&
-                !self.nodes[&pair.higher()].is_disconnected_from(&pair.lower())
-            {
-                break;
-            }
-        }
+        };
 
         debug!(
             "Node({}) and Node({}) disconnecting from each other...",

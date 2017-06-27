@@ -411,6 +411,7 @@ impl Node {
         !block.members.contains(&node) && block.prefix.matches(node)
     }
 
+    /// Vote to add the oldest candidate (from our perspective) that hasn't timed out.
     fn nodes_to_add(&self, step: u64) -> Vec<Name> {
         self.candidates
             .iter()
@@ -418,7 +419,9 @@ impl Node {
                 self.connections.contains(name) &&
                     candidate.is_recent(self.params.join_timeout, step)
             })
+            .min_by_key(|&(_, candidate)| candidate.step_added)
             .map(|(name, _)| *name)
+            .into_iter()
             .collect()
     }
 

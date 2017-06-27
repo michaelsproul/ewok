@@ -1,6 +1,8 @@
 extern crate ewok;
 #[macro_use]
 extern crate maplit;
+#[macro_use]
+extern crate unwrap;
 
 use ewok::name::Prefix;
 use ewok::event::Event;
@@ -157,8 +159,12 @@ fn cascading_merge() {
         ],
     });
 
-    let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
-    simulation.run().unwrap();
+    let mut simulation = Simulation::new_from(sections, schedule, params, node_params.clone());
+    let final_blocks = simulation.run().unwrap();
+
+    let final_block = unwrap!(final_blocks.get(&Prefix::empty()));
+
+    assert_eq!(final_block.members.len(), 3 * node_params.min_section_size - 1);
 }
 
 

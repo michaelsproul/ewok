@@ -12,6 +12,7 @@ env_logger = "0.4"
 regex = "0.2"
 clap = "2.24"
 lazy_static = "0.2"
+unwrap = "1.0"
 
 [[bin]]
 name = "ewok"

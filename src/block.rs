@@ -50,6 +50,21 @@ pub struct Vote {
     pub to: BlockId,
 }
 
+impl Vote {
+    pub fn as_debug<'a>(&self, blocks: &'a Blocks) -> DebugVote<'a> {
+        DebugVote {
+            from: self.from.into_block(blocks),
+            to: self.to.into_block(blocks),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DebugVote<'a> {
+    pub from: &'a Block,
+    pub to: &'a Block,
+}
+
 #[cfg(feature = "fast")]
 fn abs_diff(x: usize, y: usize) -> usize {
     if x >= y { x - y } else { y - x }

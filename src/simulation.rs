@@ -303,7 +303,7 @@ impl Simulation {
             for message in delivered {
                 match self.nodes.get_mut(&message.recipient) {
                     Some(node) => {
-                        let new_messages = node.handle_message(message, step);
+                        let new_messages = node.handle_message(message, &self.blocks, step);
                         self.network.send(step, new_messages);
                     }
                     None => {

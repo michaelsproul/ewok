@@ -490,8 +490,8 @@ impl Node {
             trace!(
                 "{}: voting to split from: {:?} to: {:?}",
                 self,
-                vote.from,
-                vote.to
+                vote.from.into_block(blocks),
+                vote.to.into_block(blocks)
             );
             votes.push(vote);
         }
@@ -507,8 +507,8 @@ impl Node {
             trace!(
                 "{}: voting to merge from: {:?} to: {:?}",
                 self,
-                vote.from,
-                vote.to
+                vote.from.into_block(blocks),
+                vote.to.into_block(blocks)
             );
             votes.push(vote);
         }
@@ -593,7 +593,7 @@ impl Node {
     }
 
     /// Handle a message intended for us and return messages we'd like to send.
-    pub fn handle_message(&mut self, message: Message, step: u64) -> Vec<Message> {
+    pub fn handle_message(&mut self, message: Message, blocks: &Blocks, step: u64) -> Vec<Message> {
         let to_send = match message.content {
             NodeJoined => {
                 let joining_node = message.sender;
@@ -616,7 +616,12 @@ impl Node {
                 vec![connect_msg, self.construct_bootstrap_msg(joining_node)]
             }
             VoteMsg(vote) => {
-                debug!("{}: received {:?} from {}", self, vote, message.sender);
+                debug!(
+                    "{}: received {:?} from {}",
+                    self,
+                    vote.as_debug(blocks),
+                    message.sender
+                );
                 self.add_vote(vote, Some(message.sender));
                 vec![]
             }
@@ -624,7 +629,7 @@ impl Node {
                 debug!(
                     "{}: received agreement for {:?} from {}",
                     self,
-                    vote,
+                    vote.as_debug(blocks),
                     message.sender
                 );
                 self.add_vote(vote, voters);

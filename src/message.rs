@@ -55,7 +55,9 @@ impl MessageContent {
                         .block_contents(current_blocks)
                         .into_iter()
                         .filter(|b| {
-                            b.prefix.is_neighbour(&from.prefix) || b.prefix.is_neighbour(&to.prefix)
+                            b.prefix.is_neighbour(&from.prefix) ||
+                                b.prefix.is_neighbour(&to.prefix) ||
+                                b.prefix == to.prefix
                         })
                         .flat_map(|block| block.members.iter().cloned())
                         .collect()

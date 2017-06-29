@@ -30,10 +30,11 @@ fn force_merge_rule(
     let (votes, blocks_to_insert) = {
         let mut votes = BTreeSet::new();
         let mut blocks_to_insert = BTreeSet::new();
-        for candidate in current_blocks
-            .iter()
-            .map(|b| blocks.get(b).unwrap())
-            .filter(|&b| lost_quorum(b, connections))
+        for candidate in blocks.block_contents(current_blocks).into_iter().filter(
+            |&b| {
+                !b.prefix.matches(our_name) && lost_quorum(b, connections)
+            },
+        )
         {
             for our_block in blocks
                 .our_blocks(current_blocks, our_name)

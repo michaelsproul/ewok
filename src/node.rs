@@ -654,6 +654,7 @@ impl Node {
             Disconnect => {
                 debug!("{}: lost our connection to {}", self, message.sender);
                 self.connections.remove(&message.sender);
+                self.connect_requests.remove(&message.sender);
                 vec![]
             }
             Connect => {

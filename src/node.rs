@@ -53,22 +53,6 @@ impl fmt::Display for Node {
     }
 }
 
-impl fmt::Debug for Node {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "Node({}): {} valid blocks;   {} vote counts with max \"to\" blocks of {:?};   {} \
-               current blocks: {:#?}",
-            self.our_name,
-            self.valid_blocks.len(),
-            self.vote_counts.len(),
-            self.vote_counts.values().map(BTreeMap::len).max(),
-            self.current_blocks.len(),
-            self.current_blocks
-        )
-    }
-}
-
 pub struct Candidate {
     step_added: u64,
 }
@@ -385,7 +369,7 @@ impl Node {
             if *count == self.params.max_conflicting_blocks {
                 panic!(
                     "{:?}\nhas {} valid blocks for {:?} with version {}.",
-                    self,
+                    self.as_debug(blocks),
                     count,
                     block.prefix,
                     block.version
@@ -684,5 +668,30 @@ impl Node {
         };
 
         self.filter_messages(to_send)
+    }
+
+    pub fn as_debug<'a, 'b>(&'a self, blocks: &'b Blocks) -> DebugNode<'b, 'a> {
+        DebugNode { blocks, node: self }
+    }
+}
+
+pub struct DebugNode<'a, 'b> {
+    blocks: &'a Blocks,
+    node: &'b Node,
+}
+
+impl<'a, 'b> fmt::Debug for DebugNode<'a, 'b> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "Node({}): {} valid blocks;   {} vote counts with max \"to\" blocks of {:?};   {} \
+               current blocks: {:#?}",
+            self.node.our_name,
+            self.node.valid_blocks.len(),
+            self.node.vote_counts.len(),
+            self.node.vote_counts.values().map(BTreeMap::len).max(),
+            self.node.current_blocks.len(),
+            self.blocks.block_contents(&self.node.current_blocks)
+        )
     }
 }

@@ -162,12 +162,13 @@ impl Simulation {
     /// Kill a connection between a pair of nodes which aren't already disconnected.
     fn disconnect_pair(&mut self) -> Vec<Message> {
         let pair = {
-            let connected_pairs = self.nodes.keys()
+            let connected_pairs = self.nodes
+                .keys()
                 .cloned()
                 .tuple_combinations()
                 .filter(|&(ref n1, ref n2)| {
                     !self.nodes[n1].is_disconnected_from(n2) &&
-                    !self.nodes[n2].is_disconnected_from(n1)
+                        !self.nodes[n2].is_disconnected_from(n1)
                 })
                 .map(|(n1, n2)| DisconnectedPair::new(n1, n2));
 
@@ -335,7 +336,13 @@ impl Simulation {
                 match node.our_current_blocks(&self.blocks).into_iter().count() {
                     0 => (),
                     1 => node.check_conflicting_block_count(&self.blocks),
-                    count => panic!("{:?}\nhas {} current blocks for own section.", node, count),
+                    count => {
+                        panic!(
+                            "{:?}\nhas {} current blocks for own section.",
+                            node.as_debug(&self.blocks),
+                            count
+                        )
+                    }
                 }
                 self.network.send(
                     step,
@@ -357,7 +364,7 @@ impl Simulation {
 
         debug!("-- final node states --");
         for node in self.nodes.values() {
-            debug!("{:?}", node);
+            debug!("{:?}", node.as_debug(&self.blocks));
         }
 
         assert!(

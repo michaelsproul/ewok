@@ -61,19 +61,25 @@ impl Blocks {
             if valid_blocks.contains(&new_vote.from) {
                 // This dummy vote is a bit of hack, we really just need init_vote.to = new_vote.from.
                 let init_vote = Vote {
-                    from: new_vote.to,
+                    from: new_vote.from,
                     to: new_vote.from,
                 };
                 frontier.insert((init_vote, BTreeSet::new()));
             }
         }
 
+        let mut visited_edges = BTreeSet::new();
+        // the frontier votes' `to` blocks are already validated
         while !frontier.is_empty() {
             let mut new_frontier = BTreeSet::new();
 
             for (vote, voters) in frontier {
-                // Branch out to all now valid successors of this block.
-                new_frontier.extend(self.successors(vote_counts, vote.to));
+                visited_edges.insert(vote.clone());
+                // Branch out to all now valid successors of this block which we haven't visited
+                // yet.
+                new_frontier.extend(self.successors(vote_counts, vote.to).into_iter().filter(
+                    |&(ref vote, _)| !visited_edges.contains(vote),
+                ));
 
                 // Frontier block is valid. If new, add its vote to the set of new valid votes.
                 if !valid_blocks.contains(&vote.to) {

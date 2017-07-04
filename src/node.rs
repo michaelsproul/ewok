@@ -323,7 +323,11 @@ impl Node {
         // Broadcast vote agreement messages before pruning the current block set.
         let mut messages = self.broadcast(
             blocks,
-            new_valid_votes.into_iter().map(VoteAgreedMsg).collect(),
+            new_valid_votes
+                .into_iter()
+                .filter(|&(ref vote, _)| !vote.is_witnessing(blocks))
+                .map(VoteAgreedMsg)
+                .collect(),
             step,
         );
 
@@ -422,6 +426,24 @@ impl Node {
             .collect()
     }
 
+    fn witness_votes(&self, blocks: &Blocks) -> Vec<Vote> {
+        let new_current_blocks = self.current_blocks.difference(&self.prev_current_blocks);
+        let mut votes = vec![];
+        for block in blocks
+            .block_contents(new_current_blocks)
+            .into_iter()
+            .filter(|b| !b.prefix.matches(self.our_name))
+        {
+            for our_block in self.our_current_blocks(blocks) {
+                votes.push(Vote {
+                    from: our_block.get_id(),
+                    to: block.get_id(),
+                });
+            }
+        }
+        votes
+    }
+
     /// Construct new successor blocks based on our view of the network.
     pub fn construct_new_votes(&self, blocks: &mut Blocks, step: u64) -> Vec<Vote> {
         let mut votes = vec![];
@@ -494,6 +516,16 @@ impl Node {
         {
             trace!(
                 "{}: voting to merge from: {:?} to: {:?}",
+                self,
+                vote.from.into_block(blocks),
+                vote.to.into_block(blocks)
+            );
+            votes.push(vote);
+        }
+
+        for vote in self.witness_votes(blocks) {
+            trace!(
+                "{}: witnessing from: {:?} to: {:?}",
                 self,
                 vote.from.into_block(blocks),
                 vote.to.into_block(blocks)

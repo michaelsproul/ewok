@@ -57,6 +57,12 @@ impl Vote {
             to: self.to.into_block(blocks),
         }
     }
+
+    pub fn is_witnessing(&self, blocks: &Blocks) -> bool {
+        !self.to.into_block(blocks).is_admissible_after(
+            self.from.into_block(blocks),
+        )
+    }
 }
 
 #[derive(Debug)]

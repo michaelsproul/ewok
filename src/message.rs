@@ -41,10 +41,14 @@ impl MessageContent {
     ) -> BTreeSet<Name> {
         match *self {
             // Send votes only to our section.
-            VoteMsg(Vote { ref from, ref to }) => {
-                let from = blocks.get(from).unwrap();
-                let to = blocks.get(to).unwrap();
-                &from.members | &to.members
+            VoteMsg(ref vote) => {
+                let from = vote.from.into_block(blocks);
+                let to = vote.to.into_block(blocks);
+                if vote.is_witnessing(blocks) {
+                    from.members.clone()
+                } else {
+                    &from.members | &to.members
+                }
             }
             // Send agreed votes only to neighbours of from and to
             VoteAgreedMsg((Vote { ref from, ref to }, _)) => {

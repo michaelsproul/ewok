@@ -237,11 +237,13 @@ impl Simulation {
     pub fn generate_events(&mut self, step: u64) {
         let mut events = vec![];
         events.extend(self.event_schedule.get_events(step));
-        events.extend(self.random_events.get_events(
-            self.phase,
-            &self.blocks,
-            &self.nodes,
-        ));
+        if self.event_schedule.is_empty() {
+            events.extend(self.random_events.get_events(
+                self.phase,
+                &self.blocks,
+                &self.nodes,
+            ));
+        }
         trace!("events: {:?}", events);
 
         let mut ev_messages = vec![];

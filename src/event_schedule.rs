@@ -19,6 +19,10 @@ impl EventSchedule {
         EventSchedule { schedule: BTreeMap::new() }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.schedule.is_empty()
+    }
+
     /// Fetch events occuring at the given step.
     pub fn get_events(&self, step: u64) -> Vec<Event> {
         self.schedule.get(&step).cloned().unwrap_or_else(Vec::new)

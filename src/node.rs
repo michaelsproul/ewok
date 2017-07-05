@@ -641,10 +641,14 @@ impl Node {
         let mut paths = BTreeSet::new();
         paths.insert(vec![block]);
 
-        while !paths.iter().any(
-            |p| Self::check_path(blocks, &current_blocks, p),
-        )
+        let mut had_predecessors = true;
+
+        while had_predecessors &&
+            !paths.iter().any(
+                |p| Self::check_path(blocks, &current_blocks, p),
+            )
         {
+            had_predecessors = false;
             let mut new_paths = BTreeSet::new();
             for path in paths {
                 let plast = path.last().unwrap();
@@ -652,13 +656,23 @@ impl Node {
                     .predecessors(plast, &self.rev_vote_counts)
                     .into_iter()
                     .map(|(b, _, _)| b);
+
                 for prev_block in predecessor_blocks.filter(|&b| !path.iter().any(|b2| *b2 == b)) {
+                    had_predecessors = true;
                     let mut new_path = path.clone();
                     new_path.push(prev_block);
                     new_paths.insert(new_path);
                 }
             }
             paths = new_paths;
+        }
+
+        if !had_predecessors {
+            return Message {
+                sender: self.our_name,
+                recipient: node,
+                content: NoProof(block),
+            };
         }
 
         let mut path = paths

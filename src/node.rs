@@ -2,7 +2,7 @@ use message::Message;
 use message::MessageContent;
 use message::MessageContent::*;
 use name::Name;
-use block::{Block, BlockId, Vote};
+use block::{Block, BlockId, Vote, is_quorum_of};
 use blocks::{Blocks, VoteCounts, ValidBlocks, CurrentBlocks};
 use params::NodeParams;
 use split::split_blocks;
@@ -595,6 +595,110 @@ impl Node {
         }
     }
 
+    /// Construct a RequestProof message
+    fn request_proof(&self, block: BlockId, node: Name) -> Message {
+        Message {
+            sender: self.our_name,
+            recipient: node,
+            content: RequestProof(block, self.current_blocks.clone()),
+        }
+    }
+
+    /// Returns the blocks that voted for a given block
+    /// TODO: Optimise by caching by `to` block
+    fn votes_for(&self, blocks: &Blocks, block: BlockId) -> BTreeSet<BlockId> {
+        let mut result = BTreeSet::new();
+        for (from_block, map) in &self.vote_counts {
+            for (to_block, names) in map {
+                if *to_block == block && self.valid_blocks.contains(from_block) &&
+                    is_quorum_of(names, &from_block.into_block(blocks).members)
+                {
+                    result.insert(*from_block);
+                }
+            }
+        }
+        result
+    }
+
+    fn check_path(blocks: &Blocks, current_blocks: &CurrentBlocks, p: &Vec<BlockId>) -> bool {
+        let current_blocks_objs = blocks.block_contents(current_blocks);
+        let plast = p.last().unwrap();
+        let b0 = plast.into_block(blocks);
+        current_blocks.contains(plast) ||
+            current_blocks_objs.iter().any(|b| {
+                b.prefix.is_compatible(&b0.prefix) && b.version > b0.version
+            })
+    }
+
+    /// Constructs a message with a vote bundle proving the given block
+    fn construct_proof(
+        &self,
+        blocks: &Blocks,
+        block: BlockId,
+        current_blocks: CurrentBlocks,
+        node: Name,
+    ) -> Message {
+        if !self.valid_blocks.contains(&block) ||
+            !current_blocks.iter().any(|b| self.valid_blocks.contains(b))
+        {
+            return Message {
+                sender: self.our_name,
+                recipient: node,
+                content: NoProof(block),
+            };
+        }
+        let mut paths = BTreeSet::new();
+        paths.insert(vec![block]);
+
+        while !paths.iter().any(
+            |p| Self::check_path(blocks, &current_blocks, p),
+        )
+        {
+            let mut new_paths = BTreeSet::new();
+            for path in paths {
+                let plast = path.last().unwrap();
+                for prev_block in self.votes_for(blocks, *plast).into_iter().filter(|&b| {
+                    !path.iter().any(|b2| *b2 == b)
+                })
+                {
+                    let mut new_path = path.clone();
+                    new_path.push(prev_block);
+                    new_paths.insert(new_path);
+                }
+            }
+            paths = new_paths;
+        }
+
+        let mut path = paths
+            .iter()
+            .find(|&p| Self::check_path(blocks, &current_blocks, p))
+            .unwrap()
+            .clone();
+        path.reverse();
+        let mut bundle = BTreeSet::new();
+
+        for vote in path.windows(2) {
+            let names = self.vote_counts
+                .get(&vote[0])
+                .and_then(|map| map.get(&vote[1]))
+                .unwrap()
+                .clone();
+            bundle.insert((
+                Vote {
+                    from: vote[0],
+                    to: vote[1],
+                },
+                names,
+            ));
+        }
+
+        Message {
+            sender: self.our_name,
+            recipient: node,
+            content: VoteBundle(BTreeSet::new()),
+        }
+    }
+
     /// Returns true if the peer is known and its state is `Disconnected`.
     pub fn is_disconnected_from(&self, name: &Name) -> bool {
         !self.connections.contains(name)
@@ -646,8 +750,13 @@ impl Node {
                     vote.as_debug(blocks),
                     message.sender
                 );
+                let messages = if self.valid_blocks.contains(&vote.from) {
+                    vec![]
+                } else {
+                    vec![self.request_proof(vote.from, message.sender)]
+                };
                 self.add_vote(vote, Some(message.sender));
-                vec![]
+                messages
             }
             VoteAgreedMsg((vote, voters)) => {
                 debug!(
@@ -656,15 +765,24 @@ impl Node {
                     vote.as_debug(blocks),
                     message.sender
                 );
+                let messages = if self.valid_blocks.contains(&vote.from) {
+                    vec![]
+                } else {
+                    vec![self.request_proof(vote.from, message.sender)]
+                };
                 self.add_vote(vote, voters);
-                vec![]
+                messages
             }
             VoteBundle(bundle) => {
                 debug!("{}: received a vote bundle from {}", self, message.sender);
+                let mut messages = vec![];
                 for (vote, voters) in bundle {
+                    if !self.valid_blocks.contains(&vote.from) {
+                        messages.push(self.request_proof(vote.from, message.sender));
+                    }
                     self.add_vote(vote, voters);
                 }
-                vec![]
+                messages
             }
             BootstrapMsg(vote_counts) => {
                 debug!(
@@ -698,6 +816,27 @@ impl Node {
                 } else {
                     vec![]
                 }
+            }
+            RequestProof(block, current_blocks) => {
+                trace!(
+                    "{}: received a request for proof from {} for block {:?} with current blocks {:?}",
+                    self,
+                    message.sender,
+                    block.into_block(blocks),
+                    blocks.block_contents(&current_blocks)
+                );
+                vec![
+                    self.construct_proof(blocks, block, current_blocks, message.sender),
+                ]
+            }
+            NoProof(block) => {
+                trace!(
+                    "{}: {} couldn't prove block {:?}",
+                    self,
+                    message.sender,
+                    block.into_block(blocks)
+                );
+                vec![]
             }
         };
 

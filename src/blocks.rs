@@ -202,36 +202,39 @@ impl Blocks {
             .collect()
     }
 
-    /// Find a predecessor of the given block with a quorum of votes.
+    /// Find predecessors of the given block with a quorum of votes.
     ///
-    /// Return the predecessor (block), as well as the vote (edge) from that predecessor to `block`.
-    // TODO: an index by `to` block would make this O(max_degree) instead of O(n^2).
-    fn predecessor(
+    /// Return the predecessors (blocks), as well as the votes (edges) from those predecessors to `block`.
+    pub fn predecessors(
         &self,
         block: &BlockId,
-        votes: &VoteCounts,
-    ) -> Option<(BlockId, Vote, BTreeSet<Name>)> {
-        for (from, map) in votes {
-            for (to, voters) in map {
-                let from_block = from.into_block(self);
-                if to == block && is_quorum_of(voters, &from_block.members) {
-                    let vote = Vote {
-                        from: *from,
-                        to: *to,
-                    };
-
-                    return Some((*from, vote, voters.clone()));
-                }
-            }
-        }
-        None
+        rev_votes: &VoteCounts,
+    ) -> BTreeSet<(BlockId, Vote, BTreeSet<Name>)> {
+        rev_votes.get(block).map_or_else(BTreeSet::new, |map| {
+            map.into_iter()
+                .filter(|&(block_from, votes)| {
+                    let block_from_obj = block_from.into_block(self);
+                    is_quorum_of(votes, &block_from_obj.members)
+                })
+                .map(|(block_from, votes)| {
+                    (
+                        *block_from,
+                        Vote {
+                            from: *block_from,
+                            to: *block,
+                        },
+                        votes.clone(),
+                    )
+                })
+                .collect()
+        })
     }
 
     /// Get all the votes for the history of `block` back to the last split.
     pub fn chain_segment(
         &self,
         block: &BlockId,
-        votes: &VoteCounts,
+        rev_votes: &VoteCounts,
     ) -> BTreeSet<(Vote, BTreeSet<Name>)> {
         let mut segment_votes = btreeset!{};
 
@@ -240,7 +243,10 @@ impl Blocks {
 
         // Go back in history until we find the block that our section split out of.
         while block.prefix.is_prefix_of(&oldest_block.prefix) && oldest_block.version > 0 {
-            match self.predecessor(&oldest_block.get_id(), votes) {
+            let predecessors = self.predecessors(&oldest_block.get_id(), rev_votes);
+            match predecessors.into_iter().find(|&(_, ref vote, _)| {
+                !vote.is_witnessing(self)
+            }) {
                 Some((predecessor, vote, voters)) => {
                     segment_votes.insert((vote, voters));
                     oldest_block = predecessor.into_block(self);
@@ -302,7 +308,8 @@ mod test {
 
     #[test]
     fn segment() {
-        let b1_members = btreeset!{ Name(0), Name(1), Name(2), Name(3), Name(4) };
+        let b1_members =
+            btreeset!{ Name(0), Name(1), Name(2), Name(3 & (1 << 63)), Name(4 & (1 << 63)) };
         let b1 = Block {
             prefix: Prefix::empty(),
             version: 0,
@@ -325,17 +332,17 @@ mod test {
         let b2_id = blocks.insert(b2);
         let b3_id = blocks.insert(b3);
 
-        let votes =
+        let rev_votes =
             btreemap! {
-            b1_id => btreemap! {
-                b2_id => b1_members.clone(),
-            },
             b2_id => btreemap! {
-                b3_id => b2_members.clone(),
+                b1_id => b1_members.clone(),
+            },
+            b3_id => btreemap! {
+                b2_id => b2_members.clone(),
             },
         };
 
-        let segment_votes = blocks.chain_segment(&b3_id, &votes);
+        let segment_votes = blocks.chain_segment(&b3_id, &rev_votes);
 
         let v12 = Vote {
             from: b1_id,

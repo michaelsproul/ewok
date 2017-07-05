@@ -63,7 +63,8 @@ fn four_sections() {
     let params = default_params();
     let node_params = NodeParams::default();
 
-    let sections = btreemap! {
+    let sections =
+        btreemap! {
         p00() => node_params.min_section_size,
         p01() => node_params.min_section_size,
         p10() => node_params.min_section_size,
@@ -99,7 +100,8 @@ fn two_drop_one_join() {
         ..NodeParams::default()
     };
 
-    let sections = btreemap! {
+    let sections =
+        btreemap! {
         Prefix::empty() => num_initial,
     };
 
@@ -124,7 +126,8 @@ fn two_drop_merge() {
     let params = default_params();
     let node_params = NodeParams::default();
 
-    let sections = btreemap! {
+    let sections =
+        btreemap! {
         p0() => node_params.min_section_size,
         p1() => node_params.min_section_size,
     };
@@ -147,7 +150,8 @@ fn cascading_merge() {
     let params = default_params();
     let node_params = NodeParams::default();
 
-    let sections = btreemap! {
+    let sections =
+        btreemap! {
         p0() => node_params.min_section_size,
         p10() => node_params.min_section_size,
         p11() => node_params.min_section_size,
@@ -164,7 +168,10 @@ fn cascading_merge() {
 
     let final_block = unwrap!(final_blocks.get(&Prefix::empty()));
 
-    assert_eq!(final_block.members.len(), 3 * node_params.min_section_size - 1);
+    assert_eq!(
+        final_block.members.len(),
+        3 * node_params.min_section_size - 1
+    );
 }
 
 
@@ -176,7 +183,8 @@ fn one_join_one_drop() {
     let node_params = NodeParams::default();
     let params = default_params();
 
-    let sections = btreemap! {
+    let sections =
+        btreemap! {
         p0() => node_params.min_section_size,
         p1() => node_params.min_section_size,
     };
@@ -199,7 +207,8 @@ fn triple_drop_merge() {
     let node_params = NodeParams::default();
     let params = default_params();
 
-    let sections = btreemap! {
+    let sections =
+        btreemap! {
         p0() => node_params.min_section_size,
         p1() => node_params.min_section_size,
     };
@@ -219,21 +228,22 @@ fn triple_drop_merge() {
 fn add_events(schedule: &mut EventSchedule, offset: u64, spacing: u64, events: Vec<Event>) {
     let start_step = schedule.schedule.keys().next_back().cloned().unwrap_or(0) + offset;
 
-    let timed_events = events.into_iter()
-        .enumerate()
-        .map(|(i, ev)| (start_step + (i as u64 + 1) * spacing, vec![ev]));
+    let timed_events = events.into_iter().enumerate().map(|(i, ev)| {
+        (start_step + (i as u64 + 1) * spacing, vec![ev])
+    });
 
     schedule.schedule.extend(timed_events);
 }
 
 #[test]
-fn growth_then_cascading_merge() {
+fn growth_then_cascade() {
     init_logging();
 
     let node_params = NodeParams::default();
     let params = default_params();
 
-    let sections = btreemap! {
+    let sections =
+        btreemap! {
         p0() => node_params.min_section_size,
         p1() => node_params.min_section_size,
     };
@@ -244,16 +254,36 @@ fn growth_then_cascading_merge() {
     let add_to = |prefix: Prefix| AddNode(prefix.substituted_in(random()));
 
     // 8 nodes in 10.
-    add_events(&mut schedule, 0, step_size, (0..9).map(|_| add_to(p10())).collect());
+    add_events(
+        &mut schedule,
+        0,
+        step_size,
+        (0..9).map(|_| add_to(p10())).collect(),
+    );
 
     // 8 nodes in 111 (should cause a split into 10 and 11).
-    add_events(&mut schedule, 50, step_size, (0..9).map(|_| add_to(p111())).collect());
+    add_events(
+        &mut schedule,
+        50,
+        step_size,
+        (0..9).map(|_| add_to(p111())).collect(),
+    );
 
     // 8 nodes in 110 (should cause a split into 110 and 111).
-    add_events(&mut schedule, 50, step_size, (0..9).map(|_| add_to(p110())).collect());
+    add_events(
+        &mut schedule,
+        50,
+        step_size,
+        (0..9).map(|_| add_to(p110())).collect(),
+    );
 
     // Remove 8 nodes from 10, should cause a cascading merge!
-    add_events(&mut schedule, 50, 2 * step_size, (0..8).map(|_| RemoveNodeFrom(p10())).collect());
+    add_events(
+        &mut schedule,
+        50,
+        2 * step_size,
+        (0..8).map(|_| RemoveNodeFrom(p10())).collect(),
+    );
 
     let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
     simulation.run().unwrap();

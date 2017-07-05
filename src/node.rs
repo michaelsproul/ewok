@@ -2,7 +2,7 @@ use message::Message;
 use message::MessageContent;
 use message::MessageContent::*;
 use name::Name;
-use block::{Block, BlockId, Vote, is_quorum_of};
+use block::{Block, BlockId, Vote};
 use blocks::{Blocks, VoteCounts, ValidBlocks, CurrentBlocks};
 use params::NodeParams;
 use split::split_blocks;
@@ -30,6 +30,8 @@ pub struct Node {
     pub prev_current_blocks: CurrentBlocks,
     /// Map from blocks to voters for that block.
     pub vote_counts: VoteCounts,
+    /// Reverse map from blocks to voters (to -> from -> voters)
+    pub rev_vote_counts: VoteCounts,
     /// Recently received votes that haven't yet been applied to the sets of valid and current
     /// blocks.
     pub recent_votes: BTreeSet<Vote>,
@@ -93,6 +95,7 @@ impl Node {
             connect_requests: BTreeSet::new(),
             candidates: BTreeMap::new(),
             vote_counts: BTreeMap::new(),
+            rev_vote_counts: BTreeMap::new(),
             recent_votes: BTreeSet::new(),
             message_filter: VecDeque::with_capacity(MESSAGE_FILTER_LEN),
             params,
@@ -117,6 +120,12 @@ impl Node {
             .entry(vote.to)
             .or_insert_with(BTreeSet::new);
         voters.extend(voted_for);
+        let rev_voters = self.rev_vote_counts
+            .entry(vote.to)
+            .or_insert_with(BTreeMap::new)
+            .entry(vote.from)
+            .or_insert_with(BTreeSet::new);
+        rev_voters.extend(voters.clone());
     }
 
     /// Update valid and current block sets, return set of newly valid blocks to broadcast,
@@ -212,7 +221,7 @@ impl Node {
                         // Union of all chain segments for sibling block history.
                         let segments: BTreeSet<_> = sibling_blocks
                             .flat_map(|sibling_block| {
-                                blocks.chain_segment(&sibling_block.get_id(), &self.vote_counts)
+                                blocks.chain_segment(&sibling_block.get_id(), &self.rev_vote_counts)
                             })
                             .collect();
 
@@ -604,22 +613,6 @@ impl Node {
         }
     }
 
-    /// Returns the blocks that voted for a given block
-    /// TODO: Optimise by caching by `to` block
-    fn votes_for(&self, blocks: &Blocks, block: BlockId) -> BTreeSet<BlockId> {
-        let mut result = BTreeSet::new();
-        for (from_block, map) in &self.vote_counts {
-            for (to_block, names) in map {
-                if *to_block == block && self.valid_blocks.contains(from_block) &&
-                    is_quorum_of(names, &from_block.into_block(blocks).members)
-                {
-                    result.insert(*from_block);
-                }
-            }
-        }
-        result
-    }
-
     fn check_path(blocks: &Blocks, current_blocks: &CurrentBlocks, p: &Vec<BlockId>) -> bool {
         let current_blocks_objs = blocks.block_contents(current_blocks);
         let plast = p.last().unwrap();
@@ -657,10 +650,11 @@ impl Node {
             let mut new_paths = BTreeSet::new();
             for path in paths {
                 let plast = path.last().unwrap();
-                for prev_block in self.votes_for(blocks, *plast).into_iter().filter(|&b| {
-                    !path.iter().any(|b2| *b2 == b)
-                })
-                {
+                let predecessor_blocks = blocks
+                    .predecessors(plast, &self.rev_vote_counts)
+                    .into_iter()
+                    .map(|(b, _, _)| b);
+                for prev_block in predecessor_blocks.filter(|&b| !path.iter().any(|b2| *b2 == b)) {
                     let mut new_path = path.clone();
                     new_path.push(prev_block);
                     new_paths.insert(new_path);

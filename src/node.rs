@@ -605,11 +605,27 @@ impl Node {
     }
 
     /// Construct a RequestProof message
-    fn request_proof(&self, block: BlockId, node: Name) -> Message {
-        Message {
-            sender: self.our_name,
-            recipient: node,
-            content: RequestProof(block, self.current_blocks.clone()),
+    fn request_proof(&self, blocks: &Blocks, block: BlockId, node: Name) -> Vec<Message> {
+        let max_version = blocks
+            .block_contents(&self.current_blocks)
+            .into_iter()
+            .map(|b| b.version)
+            .max();
+        // Request proof if the `from` block isn't valid and it's version is less than the
+        // max version we have - 10
+        // FIXME: this tries to prevent bootstrapping issues - find a less hacky way to do this
+        if self.valid_blocks.contains(&block) ||
+            max_version.map_or(true, |ver| block.into_block(blocks).version > ver + 10)
+        {
+            vec![]
+        } else {
+            vec![
+                Message {
+                    sender: self.our_name,
+                    recipient: node,
+                    content: RequestProof(block, self.current_blocks.clone()),
+                },
+            ]
         }
     }
 
@@ -758,11 +774,7 @@ impl Node {
                     vote.as_debug(blocks),
                     message.sender
                 );
-                let messages = if self.valid_blocks.contains(&vote.from) {
-                    vec![]
-                } else {
-                    vec![self.request_proof(vote.from, message.sender)]
-                };
+                let messages = self.request_proof(blocks, vote.from, message.sender);
                 self.add_vote(vote, Some(message.sender));
                 messages
             }
@@ -773,11 +785,7 @@ impl Node {
                     vote.as_debug(blocks),
                     message.sender
                 );
-                let messages = if self.valid_blocks.contains(&vote.from) {
-                    vec![]
-                } else {
-                    vec![self.request_proof(vote.from, message.sender)]
-                };
+                let messages = self.request_proof(blocks, vote.from, message.sender);
                 self.add_vote(vote, voters);
                 messages
             }
@@ -786,7 +794,7 @@ impl Node {
                 let mut messages = vec![];
                 for (vote, voters) in bundle {
                     if !self.valid_blocks.contains(&vote.from) {
-                        messages.push(self.request_proof(vote.from, message.sender));
+                        messages.extend(self.request_proof(blocks, vote.from, message.sender));
                     }
                     self.add_vote(vote, voters);
                 }

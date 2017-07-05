@@ -1,4 +1,4 @@
-use block::Vote;
+use block::{BlockId, Vote};
 use blocks::{VoteCounts, CurrentBlocks, Blocks};
 use name::Name;
 use self::MessageContent::*;
@@ -19,6 +19,10 @@ pub enum MessageContent {
     VoteAgreedMsg((Vote, BTreeSet<Name>)),
     /// Collection of agreed votes, sent during a merge.
     VoteBundle(BTreeSet<(Vote, BTreeSet<Name>)>),
+    /// Request for a proof for the given block
+    RequestProof(BlockId, CurrentBlocks),
+    /// Means that the node couldn't prove the requested block
+    NoProof(BlockId),
     /// Message sent from joining node (sender) to all section members (recipients).
     NodeJoined,
     /// Message sent to a joining node to get it up to date on the current blocks.

@@ -7,6 +7,7 @@ extern crate log;
 extern crate env_logger;
 
 pub mod block;
+pub mod blocks;
 pub mod consistency;
 pub mod event;
 pub mod event_schedule;
@@ -17,7 +18,6 @@ pub mod name;
 pub mod network;
 pub mod node;
 pub mod params;
-pub mod peer_state;
 pub mod random;
 pub mod random_events;
 pub mod simulation;

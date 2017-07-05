@@ -1,13 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
-use std::rc::Rc;
 
 use network::Network;
 use event::Event;
 use event_schedule::EventSchedule;
 use node::Node;
 use name::{Name, Prefix};
-use block::Block;
+use block::BlockId;
+use blocks::Blocks;
 use generate::generate_network;
 use consistency::check_consistency;
 use message::Message;
@@ -65,9 +65,10 @@ pub enum Phase {
 
 pub struct Simulation {
     nodes: BTreeMap<Name, Node>,
+    blocks: Blocks,
     network: Network,
     /// Set of blocks that all nodes start from (often just a single genesis block).
-    genesis_set: BTreeSet<Rc<Block>>,
+    genesis_set: BTreeSet<BlockId>,
     /// Parameters for the network and the simulation.
     params: SimulationParams,
     /// Parameters for nodes.
@@ -85,28 +86,34 @@ pub struct Simulation {
 impl Simulation {
     /// Create a new simulation with a single seed node.
     pub fn new(params: SimulationParams, node_params: NodeParams) -> Self {
-        let single_node_genesis = btreemap! {
+        let single_node_genesis =
+            btreemap! {
             Prefix::empty() => 1
         };
-        Self::new_from(single_node_genesis,
-                       EventSchedule::empty(),
-                       params,
-                       node_params)
+        Self::new_from(
+            single_node_genesis,
+            EventSchedule::empty(),
+            params,
+            node_params,
+        )
     }
 
     /// Create a new simulation with sections whose prefixes and sizes are specified by `sections`.
     ///
     /// Note: the `num_nodes` parameter is entirely ignored by this constructor.
-    pub fn new_from(sections: BTreeMap<Prefix, usize>,
-                    event_schedule: EventSchedule,
-                    params: SimulationParams,
-                    node_params: NodeParams)
-                    -> Self {
-        let (nodes, genesis_set) = generate_network(&sections, &node_params);
+    pub fn new_from(
+        sections: BTreeMap<Prefix, usize>,
+        event_schedule: EventSchedule,
+        params: SimulationParams,
+        node_params: NodeParams,
+    ) -> Self {
+        let mut blocks = Blocks::new();
+        let (nodes, genesis_set) = generate_network(&mut blocks, &sections, &node_params);
         let network = Network::new(params.max_delay);
         let random_events = RandomEvents::new(params.clone(), node_params.clone());
 
         Simulation {
+            blocks,
             nodes,
             genesis_set,
             network,
@@ -123,7 +130,7 @@ impl Simulation {
         // Make the node active, and let it build its way up from the genesis block(s).
         let genesis_set = self.genesis_set.clone();
         let params = self.node_params.clone();
-        let node = Node::new(joining, genesis_set, params, step);
+        let node = Node::new(joining, &self.blocks, genesis_set, params, step);
         self.nodes.insert(joining, node);
     }
 
@@ -137,7 +144,9 @@ impl Simulation {
         let disconnected = mem::replace(&mut self.disconnected, BTreeSet::new());
         self.disconnected = disconnected
             .into_iter()
-            .filter(|pair| pair.lower() != leaving_node && pair.higher() != leaving_node)
+            .filter(|pair| {
+                pair.lower() != leaving_node && pair.higher() != leaving_node
+            })
             .collect();
     }
 
@@ -159,24 +168,29 @@ impl Simulation {
             }
             pair = DisconnectedPair::new(*rnd_pair[0].0, *rnd_pair[1].0);
             if !self.nodes[&pair.lower()].is_disconnected_from(&pair.higher()) &&
-               !self.nodes[&pair.higher()].is_disconnected_from(&pair.lower()) {
+                !self.nodes[&pair.higher()].is_disconnected_from(&pair.lower())
+            {
                 break;
             }
         }
 
-        debug!("Node({}) and Node({}) disconnecting from each other...",
-               pair.lower(),
-               pair.higher());
-        let messages = vec![Message {
-                                sender: pair.lower(),
-                                recipient: pair.higher(),
-                                content: ConnectionLost,
-                            },
-                            Message {
-                                sender: pair.higher(),
-                                recipient: pair.lower(),
-                                content: ConnectionLost,
-                            }];
+        debug!(
+            "Node({}) and Node({}) disconnecting from each other...",
+            pair.lower(),
+            pair.higher()
+        );
+        let messages = vec![
+            Message {
+                sender: pair.lower(),
+                recipient: pair.higher(),
+                content: Disconnect,
+            },
+            Message {
+                sender: pair.higher(),
+                recipient: pair.lower(),
+                content: Disconnect,
+            },
+        ];
 
         self.disconnected.insert(pair);
         messages
@@ -190,21 +204,24 @@ impl Simulation {
         for pair in disconnected {
             // Ensure both have realised they're disconnected.
             if self.nodes[&pair.lower()].is_disconnected_from(&pair.higher()) &&
-               self.nodes[&pair.higher()].is_disconnected_from(&pair.lower()) &&
-               do_with_probability(self.params.prob_reconnect(self.phase)) {
-                debug!("Node({}) and Node({}) reconnecting to each other...",
-                       pair.lower(),
-                       pair.higher());
+                self.nodes[&pair.higher()].is_disconnected_from(&pair.lower()) &&
+                do_with_probability(self.params.prob_reconnect(self.phase))
+            {
+                debug!(
+                    "Node({}) and Node({}) reconnecting to each other...",
+                    pair.lower(),
+                    pair.higher()
+                );
                 messages.push(Message {
-                                  sender: pair.lower(),
-                                  recipient: pair.higher(),
-                                  content: ConnectionRegained,
-                              });
+                    sender: pair.lower(),
+                    recipient: pair.higher(),
+                    content: Connect,
+                });
                 messages.push(Message {
-                                  sender: pair.higher(),
-                                  recipient: pair.lower(),
-                                  content: ConnectionRegained,
-                              });
+                    sender: pair.higher(),
+                    recipient: pair.lower(),
+                    content: Connect,
+                });
             } else {
                 self.disconnected.insert(pair);
             }
@@ -216,7 +233,11 @@ impl Simulation {
     pub fn generate_events(&mut self, step: u64) {
         let mut events = vec![];
         events.extend(self.event_schedule.get_events(step));
-        events.extend(self.random_events.get_events(self.phase, &self.nodes));
+        events.extend(self.random_events.get_events(
+            self.phase,
+            &self.blocks,
+            &self.nodes,
+        ));
         trace!("events: {:?}", events);
 
         let mut ev_messages = vec![];
@@ -262,15 +283,19 @@ impl Simulation {
                 } else {
                     no_op_step_count = 0;
                 }
-                info!("-- step {} ({:?}) {} nodes --",
-                      step,
-                      self.phase,
-                      self.nodes.len());
+                info!(
+                    "-- step {} ({:?}) {} nodes --",
+                    step,
+                    self.phase,
+                    self.nodes.len()
+                );
             } else {
-                info!("-- step {} ({:?}) {} nodes --",
-                      step,
-                      self.phase,
-                      self.nodes.len());
+                info!(
+                    "-- step {} ({:?}) {} nodes --",
+                    step,
+                    self.phase,
+                    self.nodes.len()
+                );
                 self.generate_events(step);
             }
 
@@ -278,7 +303,7 @@ impl Simulation {
             for message in delivered {
                 match self.nodes.get_mut(&message.recipient) {
                     Some(node) => {
-                        let new_messages = node.handle_message(message, step);
+                        let new_messages = node.handle_message(message, &self.blocks, step);
                         self.network.send(step, new_messages);
                     }
                     None => {
@@ -290,7 +315,7 @@ impl Simulation {
             // Shutdown nodes that have failed to join.
             let mut to_shutdown = BTreeSet::new();
             for (name, node) in &self.nodes {
-                if node.should_shutdown(step) {
+                if node.should_shutdown(&self.blocks, step) {
                     to_shutdown.insert(*name);
                 }
             }
@@ -304,34 +329,46 @@ impl Simulation {
 
             // Update node state (current blocks), and send new votes.
             for node in self.nodes.values_mut() {
-                match node.our_current_blocks().count() {
+                match node.our_current_blocks(&self.blocks).into_iter().count() {
                     0 => (),
-                    1 => node.check_conflicting_block_count(),
+                    1 => node.check_conflicting_block_count(&self.blocks),
                     count => panic!("{:?}\nhas {} current blocks for own section.", node, count),
                 }
-                self.network.send(step, node.update_state());
-                self.network.send(step, node.broadcast_new_votes(step));
+                self.network.send(
+                    step,
+                    node.update_state(&mut self.blocks, step),
+                );
+                self.network.send(
+                    step,
+                    node.broadcast_new_votes(&mut self.blocks, step),
+                );
             }
 
             self.phase = self.phase_for_next_step(step);
 
-            debug!("- {} messages still in queue. -",
-                   self.network.messages_in_queue());
+            debug!(
+                "- {} messages still in queue. -",
+                self.network.messages_in_queue()
+            );
         }
 
         debug!("-- final node states --");
         for node in self.nodes.values() {
             debug!("{:?}", node);
-            trace!("{:#?}", node.peer_states);
         }
 
-        assert!(no_op_step_count > self.node_params.join_timeout,
-                "Votes were still being sent and received after {} extra steps during which no \
+        assert!(
+            no_op_step_count > self.node_params.join_timeout,
+            "Votes were still being sent and received after {} extra steps during which no \
                  churn was triggered.",
-                max_extra_steps);
+            max_extra_steps
+        );
 
-        check_consistency(&self.nodes, self.node_params.min_section_size as usize)
-            .map_err(|_| seed())
+        check_consistency(
+            &self.blocks,
+            &self.nodes,
+            self.node_params.min_section_size as usize,
+        ).map_err(|_| seed())
     }
 
     fn phase_for_next_step(&self, step: u64) -> Phase {

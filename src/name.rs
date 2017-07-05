@@ -189,7 +189,8 @@ impl Prefix {
     /// Returns whether the namespace defined by `self` is covered by prefixes in the `prefixes`
     /// set
     pub fn is_covered_by<'a, U>(&self, prefixes: U) -> bool
-        where U: IntoIterator<Item = &'a Prefix> + Clone
+    where
+        U: IntoIterator<Item = &'a Prefix> + Clone,
     {
         let max_prefix_len = prefixes
             .clone()
@@ -201,17 +202,21 @@ impl Prefix {
     }
 
     fn is_covered_by_impl<'a, U>(&self, prefixes: U, max_prefix_len: usize) -> bool
-        where U: IntoIterator<Item = &'a Prefix> + Clone
+    where
+        U: IntoIterator<Item = &'a Prefix> + Clone,
     {
-        prefixes
-            .clone()
-            .into_iter()
-            .any(|x| x.is_compatible(self) && x.bit_count() <= self.bit_count()) ||
-        (self.bit_count() <= max_prefix_len &&
-         self.pushed(false)
-             .is_covered_by_impl(prefixes.clone(), max_prefix_len) &&
-         self.pushed(true)
-             .is_covered_by_impl(prefixes, max_prefix_len))
+        prefixes.clone().into_iter().any(|x| {
+            x.is_compatible(self) && x.bit_count() <= self.bit_count()
+        }) ||
+            (self.bit_count() <= max_prefix_len &&
+                 self.pushed(false).is_covered_by_impl(
+                    prefixes.clone(),
+                    max_prefix_len,
+                ) &&
+                 self.pushed(true).is_covered_by_impl(
+                    prefixes,
+                    max_prefix_len,
+                ))
     }
 
     /// Returns the given `name` with first bits replaced by `self`
@@ -227,9 +232,9 @@ impl Prefix {
     pub fn sibling(&self) -> Option<Prefix> {
         if self.bit_count > 0 {
             Some(Prefix {
-                     name: self.name.with_flipped_bit(self.bit_count - 1),
-                     bit_count: self.bit_count,
-                 })
+                name: self.name.with_flipped_bit(self.bit_count - 1),
+                bit_count: self.bit_count,
+            })
         } else {
             None
         }
@@ -242,8 +247,10 @@ impl Prefix {
         if self.bit_count > other.bit_count || self.bit_count == 0 {
             return false;
         }
-        let ancestor = Prefix::new(self.bit_count,
-                                   other.name.with_flipped_bit(self.bit_count - 1));
+        let ancestor = Prefix::new(
+            self.bit_count,
+            other.name.with_flipped_bit(self.bit_count - 1),
+        );
         &ancestor == self
     }
 }

@@ -40,14 +40,16 @@ pub fn random<T: Rand>() -> T {
 
 /// Sample values from an iterator.
 pub fn sample<T, I>(iterable: I, amount: usize) -> Vec<T>
-    where I: IntoIterator<Item = T>
+where
+    I: IntoIterator<Item = T>,
 {
     WEAK_RNG.with(|rng| rand::sample(&mut *rng.borrow_mut(), iterable, amount))
 }
 
 /// Sample a single value from an iterator.
 pub fn sample_single<T, I>(iterable: I) -> Option<T>
-    where I: IntoIterator<Item = T>
+where
+    I: IntoIterator<Item = T>,
 {
     sample(iterable, 1).pop()
 }

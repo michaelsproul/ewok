@@ -39,12 +39,12 @@ fn add_node(joining_node: Name, nodes: &BTreeMap<Name, Node>) -> Vec<Message> {
     nodes
         .iter()
         .map(|(&neighbour, _)| {
-                 Message {
-                     sender: joining_node,
-                     recipient: neighbour,
-                     content: NodeJoined,
-                 }
-             })
+            Message {
+                sender: joining_node,
+                recipient: neighbour,
+                content: NodeJoined,
+            }
+        })
         .collect()
 }
 
@@ -61,11 +61,11 @@ fn remove_node(to_remove: Name, nodes: &BTreeMap<Name, Node>) -> Vec<Message> {
     nodes
         .iter()
         .map(|(&neighbour, _)| {
-                 Message {
-                     sender: to_remove,
-                     recipient: neighbour,
-                     content: ConnectionLost,
-                 }
-             })
+            Message {
+                sender: to_remove,
+                recipient: neighbour,
+                content: Disconnect,
+            }
+        })
         .collect()
 }

@@ -717,7 +717,7 @@ impl Node {
         Message {
             sender: self.our_name,
             recipient: node,
-            content: VoteBundle(BTreeSet::new()),
+            content: VoteBundle(bundle),
         }
     }
 

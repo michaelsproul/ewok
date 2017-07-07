@@ -12,6 +12,7 @@ use ewok::logging::init_logging;
 use ewok::simulation::Simulation;
 use ewok::params::{SimulationParams, NodeParams};
 use ewok::random::random;
+use std::iter;
 
 // TODO: parameterise tests by their basic parameters like max_delay and num_steps
 // so we can easily run all the tests with different values.
@@ -225,8 +226,12 @@ fn triple_drop_merge() {
     simulation.run().unwrap();
 }
 
+fn step_num(schedule: &EventSchedule, offset: u64) -> u64 {
+    schedule.schedule.keys().next_back().cloned().unwrap_or(0) + offset
+}
+
 fn add_events(schedule: &mut EventSchedule, offset: u64, spacing: u64, events: Vec<Event>) {
-    let start_step = schedule.schedule.keys().next_back().cloned().unwrap_or(0) + offset;
+    let start_step = step_num(schedule, offset);
 
     let timed_events = events.into_iter().enumerate().map(|(i, ev)| {
         (start_step + (i as u64 + 1) * spacing, vec![ev])
@@ -284,6 +289,73 @@ fn growth_then_cascade() {
         2 * step_size,
         (0..8).map(|_| RemoveNodeFrom(p10())).collect(),
     );
+
+    let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
+    simulation.run().unwrap();
+}
+
+#[test]
+fn growth_then_force_merge() {
+    init_logging();
+
+    let node_params = NodeParams::default();
+    let params = default_params();
+
+    let sections =
+        btreemap! {
+        Prefix::short(0, 0) => 1
+    };
+
+    let step_size = 20;
+    let mut schedule = EventSchedule::empty();
+
+    let add_to = |prefix: Prefix| AddNode(prefix.substituted_in(random()));
+
+    // 9 nodes in 00.
+    add_events(
+        &mut schedule,
+        0,
+        step_size,
+        (0..9).map(|_| add_to(p00())).collect(),
+    );
+
+    // 9 nodes in 01.
+    add_events(
+        &mut schedule,
+        0,
+        step_size,
+        (0..9).map(|_| add_to(p01())).collect(),
+    );
+
+    // 9 nodes in 10.
+    add_events(
+        &mut schedule,
+        0,
+        step_size,
+        (0..9).map(|_| add_to(p10())).collect(),
+    );
+
+    // 9 nodes in 11.
+    add_events(
+        &mut schedule,
+        0,
+        step_size,
+        (0..9).map(|_| add_to(p11())).collect(),
+    );
+
+    // add some blocks to 10.
+    add_events(
+        &mut schedule,
+        0,
+        step_size,
+        (0..2).map(|_| add_to(p10())).collect(),
+    );
+
+    // Drop 5 nodes from 11 simultaneously - should trigger a force merge
+    let step = step_num(&schedule, 150);
+    schedule.schedule.extend(iter::once(
+        (step, (0..5).map(|_| RemoveNodeFrom(p11())).collect()),
+    ));
 
     let mut simulation = Simulation::new_from(sections, schedule, params, node_params);
     simulation.run().unwrap();

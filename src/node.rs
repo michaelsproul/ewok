@@ -13,7 +13,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use std::fmt;
-use itertools::Itertools;
 
 const MESSAGE_FILTER_LEN: usize = 1024;
 
@@ -169,78 +168,6 @@ impl Node {
         );
     }
 
-    /// Construct messages to send because of a merge in our own section, if one has occurred.
-    ///
-    /// Currently this sends the full histories of the _descendants of our sibling prefix_
-    /// to any of our neighbours that they would previously have been disconnected from.
-    /// E.g. we send history of 110 and 111 to 00 if we are 01 and merging with 00 into 0.
-    // FIXME(michael): break this function into smaller readable + testable parts.
-    fn merge_messages(&self, blocks: &Blocks) -> Vec<Message> {
-        let mut messages = vec![];
-        let new_current_blocks = &self.current_blocks - &self.prev_current_blocks;
-
-        for our_new_block in blocks.section_blocks(&new_current_blocks, self.our_name) {
-            for our_prev_block in blocks.section_blocks(&self.prev_current_blocks, self.our_name) {
-                // Merge case.
-                if let Some(sibling_pfx) = our_prev_block.prefix.sibling() {
-                    if our_new_block.prefix == our_prev_block.prefix.popped() {
-                        // In the case of a merge, send our sibling's history to all the
-                        // sections we are connected to but they are not.
-                        // We need to send history for all descendants of our sibling prefix,
-                        // because our sibling may be split.
-                        let sibling_blocks =
-                            blocks
-                                .block_contents(self.prev_current_blocks.iter())
-                                .into_iter()
-                                .filter(|block| sibling_pfx.is_prefix_of(&block.prefix));
-
-                        let disconn_from_sibling = blocks
-                            .block_contents(self.prev_current_blocks.iter())
-                            .into_iter()
-                            .filter(|block| {
-                                block.prefix != sibling_pfx &&
-                                    !block.prefix.is_neighbour(&sibling_pfx)
-                            })
-                            .inspect(|block| {
-                                trace!(
-                                    "{}: updating {:?} on history of {:?} because of merge",
-                                    self,
-                                    block.prefix,
-                                    sibling_pfx
-                                );
-                            })
-                            .flat_map(|block| block.members.iter().cloned())
-                            .collect_vec();
-
-                        // If there are no disconnected neighbour sections, don't try to compute
-                        // the chain segment.
-                        if disconn_from_sibling.is_empty() {
-                            continue;
-                        }
-
-                        // Union of all chain segments for sibling block history.
-                        let segments: BTreeSet<_> = sibling_blocks
-                            .flat_map(|sibling_block| {
-                                blocks.chain_segment(&sibling_block.get_id(), &self.rev_vote_counts)
-                            })
-                            .collect();
-
-                        let new_messages = disconn_from_sibling.into_iter().map(|neighbour| {
-                            Message {
-                                sender: self.our_name,
-                                recipient: neighbour,
-                                content: VoteBundle(segments.clone()),
-                            }
-                        });
-                        messages.extend(new_messages);
-                    }
-                }
-            }
-        }
-
-        messages
-    }
-
     /// Drop blocks for sections that we aren't neighbours of.
     fn prune_split_blocks(&mut self, blocks: &Blocks) {
         let all_current_blocks = mem::replace(&mut self.current_blocks, btreeset!{});
@@ -344,9 +271,6 @@ impl Node {
 
         // Generate connect and disconnect messages.
         messages.extend(self.connects_and_disconnects(blocks, step));
-
-        // Generate messages related to merging.
-        messages.extend(self.merge_messages(blocks));
 
         messages
     }
@@ -696,8 +620,17 @@ impl Node {
             .find(|&p| Self::check_path(blocks, &current_blocks, p))
             .unwrap()
             .clone();
+
+        if path.len() < 2 {
+            return Message {
+                sender: self.our_name,
+                recipient: node,
+                content: NoProof(block),
+            };
+        }
+
         path.reverse();
-        let mut bundle = BTreeSet::new();
+        let mut bundle = Vec::new();
 
         for vote in path.windows(2) {
             let names = self.vote_counts
@@ -705,7 +638,7 @@ impl Node {
                 .and_then(|map| map.get(&vote[1]))
                 .unwrap()
                 .clone();
-            bundle.insert((
+            bundle.push((
                 Vote {
                     from: vote[0],
                     to: vote[1],
@@ -789,11 +722,8 @@ impl Node {
             }
             VoteBundle(bundle) => {
                 debug!("{}: received a vote bundle from {}", self, message.sender);
-                let mut messages = vec![];
+                let messages = self.request_proof(blocks, bundle[0].0.from, message.sender);
                 for (vote, voters) in bundle {
-                    if !self.valid_blocks.contains(&vote.from) {
-                        messages.extend(self.request_proof(blocks, vote.from, message.sender));
-                    }
                     self.add_vote(vote, voters);
                 }
                 messages

@@ -18,7 +18,7 @@ pub enum MessageContent {
     /// Notification that we believe this vote to be agreed by all the listed members.
     VoteAgreedMsg((Vote, BTreeSet<Name>)),
     /// Collection of agreed votes, sent during a merge.
-    VoteBundle(BTreeSet<(Vote, BTreeSet<Name>)>),
+    VoteBundle(Vec<(Vote, BTreeSet<Name>)>),
     /// Request for a proof for the given block
     RequestProof(BlockId, CurrentBlocks),
     /// Means that the node couldn't prove the requested block
@@ -48,11 +48,7 @@ impl MessageContent {
             VoteMsg(ref vote) => {
                 let from = vote.from.into_block(blocks);
                 let to = vote.to.into_block(blocks);
-                if vote.is_witnessing(blocks) {
-                    from.members.clone()
-                } else {
-                    &from.members | &to.members
-                }
+                &from.members | &to.members
             }
             // Send agreed votes only to neighbours of from and to
             VoteAgreedMsg((Vote { ref from, ref to }, _)) => {

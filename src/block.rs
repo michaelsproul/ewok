@@ -21,29 +21,6 @@ pub struct Block {
     pub members: BTreeSet<Name>,
 }
 
-impl Block {
-    /// Returns `true` if `other` should be removed from the current blocks when `self` is a
-    /// current candidate.
-    pub fn outranks(&self, other: &Block) -> bool {
-        if self.prefix == other.prefix {
-            if self.members.len() != other.members.len() {
-                self.members.len() > other.members.len()
-            } else {
-                self.members > other.members
-            }
-        } else {
-            self.prefix.is_compatible(&other.prefix) &&
-                self.prefix.bit_count() < other.prefix.bit_count()
-        }
-    }
-
-    pub fn get_id(&self) -> BlockId {
-        let mut s = DefaultHasher::new();
-        self.hash(&mut s);
-        BlockId(s.finish())
-    }
-}
-
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Vote {
     pub from: BlockId,
@@ -108,6 +85,27 @@ impl Block {
         }
     }
 
+    /// Compute the hash of this block.
+    pub fn get_id(&self) -> BlockId {
+        let mut s = DefaultHasher::new();
+        self.hash(&mut s);
+        BlockId(s.finish())
+    }
+
+    /// Returns `true` if `other` should be removed from the current blocks when `self` is a
+    /// current candidate.
+    pub fn outranks(&self, other: &Block) -> bool {
+        if self.prefix == other.prefix {
+            if self.members.len() != other.members.len() {
+                self.members.len() > other.members.len()
+            } else {
+                self.members > other.members
+            }
+        } else {
+            self.prefix.is_compatible(&other.prefix) &&
+                self.prefix.bit_count() < other.prefix.bit_count()
+        }
+    }
 
     /// Is this block admissible after the given other block?
     ///

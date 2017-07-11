@@ -37,6 +37,20 @@ impl Block {
         }
     }
 
+    pub fn should_split(&self, min_split_size: usize) -> bool {
+        let p0 = self.prefix.pushed(false);
+        let mut len0 = 0;
+        let mut len1 = 0;
+        for name in &self.members {
+            if p0.matches(*name) {
+                len0 += 1;
+            } else {
+                len1 += 1;
+            }
+        }
+        len0 >= min_split_size && len1 >= min_split_size
+    }
+
     pub fn get_id(&self) -> BlockId {
         let mut s = DefaultHasher::new();
         self.hash(&mut s);

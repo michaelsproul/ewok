@@ -31,13 +31,12 @@ fn split_block(
     current_blocks: &CurrentBlocks,
     min_split_size: usize,
 ) -> Vec<Vote> {
-    let p0 = block.prefix.pushed(false);
-    let p1 = block.prefix.pushed(true);
-    let (s0, s1): (BTreeSet<_>, _) = block.members.iter().partition(|name| p0.matches(**name));
-
-    if s0.len() >= min_split_size && s1.len() >= min_split_size &&
+    if block.should_split(min_split_size) &&
         neighbours_ok(blocks, block, current_blocks, min_split_size)
     {
+        let p0 = block.prefix.pushed(false);
+        let p1 = block.prefix.pushed(true);
+        let (s0, s1): (BTreeSet<_>, _) = block.members.iter().partition(|name| p0.matches(**name));
         let b0 = blocks.insert(Block {
             prefix: p0,
             version: block.version + 1,

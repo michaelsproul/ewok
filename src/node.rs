@@ -329,8 +329,9 @@ impl Node {
     }
 
     /// True if the given node could be added to the given block
-    fn could_be_added(node: Name, block: &Block) -> bool {
-        !block.members.contains(&node) && block.prefix.matches(node)
+    fn could_be_added(&self, node: Name, block: &Block) -> bool {
+        !block.members.contains(&node) && block.prefix.matches(node) &&
+            !block.should_split(self.min_split_size())
     }
 
     /// Vote to add the oldest candidate (from our perspective) that hasn't timed out.
@@ -385,7 +386,7 @@ impl Node {
             let mut blocks_to_add = BTreeSet::new();
             for block in self.our_current_blocks(blocks) {
                 for node in self.nodes_to_add(step) {
-                    if Self::could_be_added(node, block) {
+                    if self.could_be_added(node, block) {
                         trace!("{}: voting to add {} to: {:?}", self, node, block);
                         let added = block.add_node(node);
                         let added_id = added.get_id();

@@ -214,6 +214,7 @@ impl Node {
         for node in &to_disconnect {
             trace!("{}: disconnecting from {}", self, node);
             self.connections.remove(node);
+            self.connect_requests.remove(node);
         }
 
         let disconnects = to_disconnect.into_iter().map(|neighbour| {

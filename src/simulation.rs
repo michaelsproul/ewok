@@ -13,7 +13,7 @@ use generate::generate_network;
 use consistency::check_consistency;
 use message::Message;
 use message::MessageContent::*;
-use params::{NodeParams, SimulationParams, quorum};
+use params::{NodeParams, SimulationParams};
 use random::{sample_single, do_with_probability, seed};
 use random_events::RandomEvents;
 use self::detail::DisconnectedPair;
@@ -417,7 +417,7 @@ impl Simulation {
                 }
             }
             Shrinking => {
-                if self.nodes.len() <= quorum(self.node_params.min_section_size) + 1 {
+                if self.nodes.len() <= self.node_params.min_section_size {
                     Finishing { since_step: step + 1 }
                 } else {
                     Shrinking

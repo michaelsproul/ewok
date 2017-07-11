@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::cmp;
 use itertools::Itertools;
 use params::{SimulationParams, NodeParams, quorum};
 use blocks::Blocks;
@@ -68,12 +67,16 @@ impl RandomEvents {
                     .members
                     .intersection(&names_sorted)
                     .count();
-                // Don't sink below a quorum of our current block, OR the min section size.
-                let min_nodes = quorum(cmp::max(
-                    our_current_block.members.len(),
-                    self.node_params.min_section_size,
-                ));
-                if num_live >= min_nodes + 2 {
+
+                // If there's only a single section, try not to take it below min section size.
+                // Otherwise, try not to sink below a quorum.
+                let min_nodes = if our_current_block.prefix.bit_count() == 0 {
+                    self.node_params.min_section_size
+                } else {
+                    // Note: the "+ 1" is an extra precaution in case of other node losses.
+                    quorum(our_current_block.members.len()) + 1
+                };
+                if num_live > min_nodes {
                     trace!(
                         "Node({}): removed from section with {} live nodes",
                         name,
@@ -83,7 +86,7 @@ impl RandomEvents {
                 }
             }
         }
-        warn!("All sections are at 'quorum' - can't find a node to remove.");
+        warn!("Can't find an appropriate node to remove");
         None
     }
 }

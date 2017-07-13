@@ -30,7 +30,7 @@ pub struct SimulationParams {
 impl SimulationParams {
     pub fn prob_join(&self, phase: Phase) -> f64 {
         match phase {
-            Starting => 0.1,
+            Starting => 1.0 / 30.0,
             Growth => self.grow_prob_join,
             Stable { .. } => self.prob_churn,
             Shrinking => self.shrink_prob_join,
@@ -82,9 +82,9 @@ impl Default for NodeParams {
         NodeParams {
             min_section_size: 8,
             split_buffer: 1,
-            join_timeout: 20,
-            self_shutdown_timeout: 100,
-            max_conflicting_blocks: 20,
+            join_timeout: 240,
+            self_shutdown_timeout: 480,
+            max_conflicting_blocks: 100,
         }
     }
 }

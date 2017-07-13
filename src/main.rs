@@ -8,18 +8,18 @@ fn main() {
     init_logging();
 
     let params = SimulationParams {
-        max_delay: 5,
-        grow_prob_join: 0.1,
-        grow_prob_drop: 0.02,
-        prob_churn: 0.05,
-        shrink_prob_join: 0.02,
-        shrink_prob_drop: 0.1,
-        prob_disconnect: 0.05,
+        max_delay: 60,
+        grow_prob_join: 1.0 / 30.0,
+        grow_prob_drop: 1.0 / 150.0,
+        prob_churn: 1.0 / 60.0,
+        shrink_prob_join: 1.0 / 150.0,
+        shrink_prob_drop: 1.0 / 30.0,
+        prob_disconnect: 1.0 / 60.0,
         // Gives ~95% chance that a pair will reconnect within 5 steps
-        prob_reconnect: 0.45,
+        prob_reconnect: 1.0 / 30.0,
         starting_complete: 16,
         grow_complete: 30,
-        stable_steps: 100,
+        stable_steps: 600,
     };
 
     let mut simulation = Simulation::new(params, NodeParams::default());

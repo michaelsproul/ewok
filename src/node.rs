@@ -166,6 +166,22 @@ impl Node {
             &mut self.current_blocks,
             blocks.compute_current_blocks(&self.current_candidate_blocks),
         );
+
+        // Log the change to our section.
+        let prev_blocks = blocks.our_blocks(&self.prev_current_blocks, self.our_name);
+        let current_blocks = self.our_current_blocks(blocks);
+        if let (Some(prev), Some(curr)) = (prev_blocks.first(), current_blocks.first()) {
+            let added = &curr.members - &prev.members;
+            let removed = &prev.members - &curr.members;
+
+            if !added.is_empty() {
+                trace!("{}: added to our current block: {:?}", self, added);
+            }
+
+            if !removed.is_empty() {
+                trace!("{}: removed from our current block: {:?}", self, removed);
+            }
+        }
     }
 
     /// Drop blocks for sections that we aren't neighbours of.

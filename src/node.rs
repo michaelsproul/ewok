@@ -308,7 +308,8 @@ impl Node {
             neighbours
                 .iter()
                 .filter(|name| {
-                    !self.connections.contains(&name) && !self.connect_requests.contains(&name)
+                    !self.connections.contains(name) && !self.connect_requests.contains(name) &&
+                    **name != our_name
                 })
                 .cloned()
                 .collect()

@@ -20,7 +20,7 @@ pub enum MessageContent {
     /// Collection of agreed votes, sent during a merge.
     VoteBundle(Vec<(Vote, BTreeSet<Name>)>),
     /// Request for a proof for the given block
-    RequestProof(BlockId, CurrentBlocks),
+    RequestProof(BlockId, BTreeSet<BlockId>),
     /// Means that the node couldn't prove the requested block
     NoProof(BlockId),
     /// Message sent from joining node (sender) to all section members (recipients).

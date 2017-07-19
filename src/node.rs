@@ -528,39 +528,56 @@ impl Node {
         }
     }
 
-    /// Construct a RequestProof message
-    fn request_proof(&self, blocks: &Blocks, block: BlockId, node: Name) -> Vec<Message> {
-        let max_version = blocks
-            .block_contents(&self.current_blocks)
-            .into_iter()
-            .map(|b| b.version)
-            .max();
-        // Request proof if the `from` block isn't valid and it's version is less than the
-        // max version we have - 10
-        // FIXME: this tries to prevent bootstrapping issues - find a less hacky way to do this
-        if self.valid_blocks.contains(&block) ||
-            max_version.map_or(true, |ver| block.into_block(blocks).version > ver + 10)
-        {
-            vec![]
-        } else {
-            vec![
-                Message {
-                    sender: self.our_name,
-                    recipient: node,
-                    content: RequestProof(block, self.current_blocks.clone()),
-                },
-            ]
+    /// Construct a RequestProof message.
+    ///
+    /// We include in our proof request the greatest versioned blocks that we know of
+    /// that are buried by the block we require proof for.
+    fn request_proof(&self, blocks: &Blocks, block_id: BlockId, node: Name) -> Vec<Message> {
+        if self.valid_blocks.contains(&block_id) {
+            return vec![];
         }
+
+        let block = block_id.into_block(blocks);
+
+        let mut likely_predecessors: BTreeSet<_> = blocks.block_contents(&self.current_blocks)
+            .into_iter()
+            .filter(|current_block| current_block.prefix.is_compatible(&block.prefix))
+            .collect();
+
+        while likely_predecessors.iter().map(|b| b.version).max().unwrap_or(0) >= block.version {
+            let new_predecessors = likely_predecessors.iter()
+                // Branch backwards.
+                .flat_map(|pred| blocks.predecessors(&pred.get_id(), &self.rev_vote_counts))
+                .map(|(id, _, _)| id.into_block(blocks))
+                // Take only blocks whose prefix matches the target block.
+                .filter(|b| b.prefix.is_compatible(&block.prefix))
+                .collect();
+
+            likely_predecessors = new_predecessors;
+        }
+
+        let predecessor_ids = likely_predecessors.into_iter()
+            .map(|block| block.get_id())
+            .collect();
+
+        vec![
+            Message {
+                sender: self.our_name,
+                recipient: node,
+                content: RequestProof(block_id, predecessor_ids),
+            },
+        ]
     }
 
     fn check_path(blocks: &Blocks, current_blocks: &CurrentBlocks, p: &Vec<BlockId>) -> bool {
         let current_blocks_objs = blocks.block_contents(current_blocks);
         let plast = p.last().unwrap();
         let b0 = plast.into_block(blocks);
-        current_blocks.contains(plast) ||
+        current_blocks.contains(plast) /*||
             current_blocks_objs.iter().any(|b| {
                 b.prefix.is_compatible(&b0.prefix) && b.version > b0.version
             })
+        */
     }
 
     /// Constructs a message with a vote bundle proving the given block
@@ -574,6 +591,7 @@ impl Node {
         if !self.valid_blocks.contains(&block) ||
             !current_blocks.iter().any(|b| self.valid_blocks.contains(b))
         {
+            trace!("{}: can't prove that block because it, or base blocks not valid for us", self);
             return Message {
                 sender: self.our_name,
                 recipient: node,
@@ -610,6 +628,7 @@ impl Node {
         }
 
         if !had_predecessors {
+            trace!("{}: can't prove that block because we're out of predecessors", self);
             return Message {
                 sender: self.our_name,
                 recipient: node,
@@ -624,6 +643,7 @@ impl Node {
             .clone();
 
         if path.len() < 2 {
+            trace!("{}: can't prove that block because we have no path to it", self);
             return Message {
                 sender: self.our_name,
                 recipient: node,

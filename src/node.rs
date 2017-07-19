@@ -542,7 +542,8 @@ impl Node {
             let mut hasher = DefaultHasher::new();
             message.hash(&mut hasher);
             let hash = hasher.finish();
-            if !self.message_filter.contains(&hash) {
+            if message.content == Connect || message.content == Disconnect ||
+                !self.message_filter.contains(&hash) {
                 filtered.push(message);
                 if self.message_filter.len() == MESSAGE_FILTER_LEN {
                     let _ = self.message_filter.pop_front();

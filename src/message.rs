@@ -48,7 +48,12 @@ impl MessageContent {
             VoteMsg(ref vote) => {
                 let from = vote.from.into_block(blocks);
                 let to = vote.to.into_block(blocks);
-                &from.members | &to.members
+
+                if false && vote.is_witnessing(blocks) {
+                    from.members.clone()
+                } else {
+                    &from.members | &to.members
+                }
             }
             // Send agreed votes only to neighbours of from and to
             VoteAgreedMsg((Vote { ref from, ref to }, _)) => {
@@ -61,7 +66,7 @@ impl MessageContent {
                         .filter(|b| {
                             b.prefix.is_neighbour(&from.prefix) ||
                                 b.prefix.is_neighbour(&to.prefix) ||
-                                b.prefix == to.prefix
+                                b.prefix == from.prefix
                         })
                         .flat_map(|block| block.members.iter().cloned())
                         .collect()

@@ -9,11 +9,12 @@ timeout = 180
 def main():
     i = 0
     while True:
-        print("run {}".format(i))
+        print("run {}".format(i), flush=True)
         try:
             sp.run(program, check=True, timeout=timeout)
         except sp.CalledProcessError as e:
-            sys.exit(1)
+            print("failed", flush=True)
+            # sys.exit(1)
         except sp.TimeoutExpired as e:
             print("timed out after {} seconds".format(e.timeout))
         i += 1

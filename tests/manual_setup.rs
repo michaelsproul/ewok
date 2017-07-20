@@ -85,6 +85,37 @@ fn four_sections() {
     simulation.run().unwrap();
 }
 
+// 00 and 01 merge into 0 at the same time that 10 and 11 merge into 1.
+#[test]
+fn four_sections_parallel_merge() {
+    init_logging();
+
+    let params = SimulationParams {
+        max_delay: 20,
+        ..default_params()
+    };
+    let node_params = NodeParams::default();
+
+    let sections =
+        btreemap! {
+        p00() => node_params.min_section_size,
+        p01() => node_params.min_section_size,
+        p10() => node_params.min_section_size,
+        p11() => node_params.min_section_size
+    };
+
+    let event_schedule = EventSchedule::new(btreemap! {
+        0 => vec![
+            RemoveNodeFrom(p00()),
+            RemoveNodeFrom(p11()),
+        ],
+    });
+
+    let mut simulation = Simulation::new_from(sections, event_schedule, params, node_params);
+
+    simulation.run().unwrap();
+}
+
 // Fraser's example 1 from: https://github.com/Fraser999/Wookie/tree/master/Example%201
 #[test]
 fn two_drop_one_join() {

@@ -1,6 +1,6 @@
 use block::{BlockId, Vote};
 use blocks::{VoteCounts, CurrentBlocks, Blocks};
-use name::Name;
+use name::{Name, Prefix};
 use self::MessageContent::*;
 use std::collections::BTreeSet;
 
@@ -36,6 +36,11 @@ pub enum MessageContent {
     Disconnect,
 }
 
+// XOR distance between the lower bounds of two prefixes.
+fn prefix_dist(p1: &Prefix, p2: &Prefix) -> u64 {
+    p1.lower_bound().0 ^ p2.lower_bound().0
+}
+
 impl MessageContent {
     pub fn recipients(
         &self,
@@ -44,39 +49,51 @@ impl MessageContent {
         our_name: Name,
     ) -> BTreeSet<Name> {
         match *self {
-            // Send votes only to our section.
+            // Send votes to members of the `from` and `to` blocks.
             VoteMsg(ref vote) => {
                 let from = vote.from.into_block(blocks);
                 let to = vote.to.into_block(blocks);
                 &from.members | &to.members
             }
-            // Send agreed votes only to neighbours of from and to
             VoteAgreedMsg((Vote { ref from, ref to }, _)) => {
-                let from = blocks.get(from).unwrap();
-                let to = blocks.get(to).unwrap();
-                if from.members.contains(&our_name) {
-                    blocks
-                        .block_contents(current_blocks)
-                        .into_iter()
-                        .filter(|b| {
-                            b.prefix.is_neighbour(&from.prefix) ||
-                                b.prefix.is_neighbour(&to.prefix) ||
-                                b.prefix == to.prefix
-                        })
-                        .flat_map(|block| block.members.iter().cloned())
-                        .collect()
-                } else {
-                    blocks
-                        .block_contents(current_blocks)
-                        .into_iter()
-                        .filter(|b| {
-                            b.prefix.is_neighbour(&to.prefix) &&
-                                !b.prefix.is_neighbour(&from.prefix) &&
-                                b.prefix != from.prefix
-                        })
-                        .flat_map(|block| block.members.iter().cloned())
-                        .collect()
+                let from = from.into_block(blocks);
+                let to = to.into_block(blocks);
+
+                // Only broadcast vote agreement if we are in the `from` or `to` block.
+                if !from.members.contains(&our_name) && !to.members.contains(&our_name) {
+                    return btreeset!{};
                 }
+
+                let current_blocks = blocks.block_contents(current_blocks);
+
+                // Send vote agreements to any neighbour section N with block `b1`, such that:
+                // 1. N is a neighbour of the `from` or `to` prefix, and
+                // 2. Our current prefix is the closest (by XOR distance) to N's prefix,
+                // amongst the set of current sections which have prefixes compatible with
+                // either the `from` prefix or the `to` prefix.
+                current_blocks
+                    .iter()
+                    .filter(|b1| {
+                        let cond1 =
+                            b1.prefix.is_neighbour(&from.prefix) ||
+                            b1.prefix.is_neighbour(&to.prefix);
+                        // (2)
+                        let cond2 = current_blocks
+                            .iter()
+                            .filter(|b2| {
+                                b2.prefix.is_compatible(&from.prefix) ||
+                                b2.prefix.is_compatible(&to.prefix)
+                            })
+                            // Min by XOR distance.
+                            .min_by_key(|b2| prefix_dist(&b1.prefix, &b2.prefix))
+                            // Are we in the section that's closest by XOR distance?
+                            .map(|closest| closest.prefix.matches(our_name))
+                            .unwrap_or(false);
+
+                        cond1 && cond2
+                    })
+                    .flat_map(|block| block.members.iter().cloned())
+                    .collect()
             }
             // Send anything else to all connected neighbours.
             _ => {

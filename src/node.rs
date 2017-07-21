@@ -261,6 +261,14 @@ impl Node {
             blocks,
             new_valid_votes
                 .into_iter()
+                .inspect(|&(ref vote, _)| {
+                    debug!(
+                        "{}: received agreement for {:?} from {}",
+                        self,
+                        vote.as_debug(blocks),
+                        self.our_name,
+                    );
+                })
                 .filter(|&(ref vote, _)| !vote.is_witnessing(blocks))
                 .map(VoteAgreedMsg)
                 .collect(),
@@ -701,7 +709,7 @@ impl Node {
                 vec![connect_msg, self.construct_bootstrap_msg(joining_node)]
             }
             VoteMsg(vote) => {
-                debug!(
+                trace!(
                     "{}: received {:?} from {}",
                     self,
                     vote.as_debug(blocks),
@@ -712,8 +720,8 @@ impl Node {
                 messages
             }
             VoteAgreedMsg((vote, voters)) => {
-                debug!(
-                    "{}: received agreement for {:?} from {}",
+                trace!(
+                    "{}: received agreement msg for {:?} from {}",
                     self,
                     vote.as_debug(blocks),
                     message.sender
@@ -723,7 +731,7 @@ impl Node {
                 messages
             }
             VoteBundle(bundle) => {
-                debug!("{}: received a vote bundle from {}", self, message.sender);
+                trace!("{}: received a vote bundle from {}", self, message.sender);
                 let messages = self.request_proof(blocks, bundle[0].0.from, message.sender);
                 for (vote, voters) in bundle {
                     self.add_vote(vote, voters);

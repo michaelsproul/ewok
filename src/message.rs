@@ -44,38 +44,24 @@ impl MessageContent {
         our_name: Name,
     ) -> BTreeSet<Name> {
         match *self {
-            // Send votes only to our section.
+            // Send votes to members of the `from` and `to` blocks.
             VoteMsg(ref vote) => {
                 let from = vote.from.into_block(blocks);
                 let to = vote.to.into_block(blocks);
                 &from.members | &to.members
             }
-            // Send agreed votes only to neighbours of from and to
+            // Send vote agreements to all our neighbours if we are in the `from` or `to` block.
             VoteAgreedMsg((Vote { ref from, ref to }, _)) => {
-                let from = blocks.get(from).unwrap();
-                let to = blocks.get(to).unwrap();
-                if from.members.contains(&our_name) {
+                let from = from.into_block(blocks);
+                let to = to.into_block(blocks);
+                if from.members.contains(&our_name) || to.members.contains(&our_name) {
                     blocks
                         .block_contents(current_blocks)
                         .into_iter()
-                        .filter(|b| {
-                            b.prefix.is_neighbour(&from.prefix) ||
-                                b.prefix.is_neighbour(&to.prefix) ||
-                                b.prefix == to.prefix
-                        })
                         .flat_map(|block| block.members.iter().cloned())
                         .collect()
                 } else {
-                    blocks
-                        .block_contents(current_blocks)
-                        .into_iter()
-                        .filter(|b| {
-                            b.prefix.is_neighbour(&to.prefix) &&
-                                !b.prefix.is_neighbour(&from.prefix) &&
-                                b.prefix != from.prefix
-                        })
-                        .flat_map(|block| block.members.iter().cloned())
-                        .collect()
+                    btreeset!{}
                 }
             }
             // Send anything else to all connected neighbours.

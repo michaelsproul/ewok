@@ -153,6 +153,16 @@ impl Prefix {
         self
     }
 
+    /// Returns the smallest name matching the prefix
+    pub fn lower_bound(&self) -> Name {
+        self.name.set_remaining(self.bit_count(), false)
+    }
+
+    /// Returns the largest name matching the prefix
+    pub fn upper_bound(&self) -> Name {
+        self.name.set_remaining(self.bit_count(), true)
+    }
+
     /// Returns the number of bits in the prefix.
     pub fn bit_count(&self) -> usize {
         self.bit_count

@@ -313,10 +313,8 @@ fn one_join_one_drop() {
     };
 
     let schedule = EventSchedule::new(btreemap! {
-        0 => vec![
-            AddNode(p0().substituted_in(random())),
-            RemoveNodeFrom(p0()),
-        ]
+        0 => vec![RemoveNodeFrom(p0())],
+        1 => vec![AddNode(p0().substituted_in(random()))],
     });
 
     let mut simulation = Simulation::new_from(sections, schedule, params, node_params);

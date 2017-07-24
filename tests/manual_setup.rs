@@ -50,11 +50,29 @@ fn p10() -> Prefix {
 fn p11() -> Prefix {
     Prefix::short(2, 0b11000000)
 }
+fn p010() -> Prefix {
+    Prefix::short(3, 0b01000000)
+}
+fn p100() -> Prefix {
+    Prefix::short(3, 0b10000000)
+}
 fn p110() -> Prefix {
     Prefix::short(3, 0b11000000)
 }
 fn p111() -> Prefix {
     Prefix::short(3, 0b11100000)
+}
+fn p0110() -> Prefix {
+    Prefix::short(4, 0b01100000)
+}
+fn p0111() -> Prefix {
+    Prefix::short(4, 0b01110000)
+}
+fn p1010() -> Prefix {
+    Prefix::short(4, 0b10100000)
+}
+fn p1011() -> Prefix {
+    Prefix::short(4, 0b10110000)
 }
 
 #[test]
@@ -87,7 +105,7 @@ fn four_sections() {
 
 // 00 and 01 merge into 0 at the same time that 10 and 11 merge into 1.
 #[test]
-fn four_sections_parallel_merge() {
+fn parallel_merge() {
     init_logging();
 
     let params = SimulationParams {
@@ -114,6 +132,79 @@ fn four_sections_parallel_merge() {
     let mut simulation = Simulation::new_from(sections, event_schedule, params, node_params);
 
     simulation.run().unwrap();
+}
+
+#[test]
+fn parallel_merge_with_adds() {
+    init_logging();
+
+    let params = SimulationParams {
+        max_delay: 20,
+        ..default_params()
+    };
+    let node_params = NodeParams::default();
+
+    let sections =
+        btreemap! {
+        p00() => node_params.min_section_size,
+        p01() => node_params.min_section_size,
+        p10() => node_params.min_section_size,
+        p11() => node_params.min_section_size
+    };
+
+    let event_schedule = EventSchedule::new(btreemap! {
+        0 => vec![
+            RemoveNodeFrom(p00()),
+            RemoveNodeFrom(p11()),
+            AddNode(p00().substituted_in(random())),
+            AddNode(p11().substituted_in(random())),
+        ],
+    });
+
+    let mut simulation = Simulation::new_from(sections, event_schedule, params, node_params);
+
+    simulation.run().unwrap();
+}
+
+#[test]
+fn parallel_cascading_merges() {
+    init_logging();
+
+    let params = SimulationParams {
+        max_delay: 20,
+        ..default_params()
+    };
+    let node_params = NodeParams::default();
+    let min_section_size = node_params.min_section_size;
+
+    let sections =
+        btreemap! {
+        p00() => node_params.min_section_size,
+        p010() => node_params.min_section_size,
+        p0110() => node_params.min_section_size,
+        p0111() => node_params.min_section_size,
+        p100() => node_params.min_section_size,
+        p1010() => node_params.min_section_size,
+        p1011() => node_params.min_section_size,
+        p11() => node_params.min_section_size
+    };
+
+    let event_schedule = EventSchedule::new(btreemap! {
+        0 => vec![
+            RemoveNodeFrom(p00()),
+            RemoveNodeFrom(p010()),
+            RemoveNodeFrom(p100()),
+            RemoveNodeFrom(p11()),
+        ],
+    });
+
+    let mut simulation = Simulation::new_from(sections, event_schedule, params, node_params);
+
+    let final_blocks = simulation.run().unwrap();
+
+    // Check that only 4 nodes were lost.
+    let total_nodes: usize = final_blocks.values().map(|b| b.members.len()).sum();
+    assert_eq!(total_nodes, 8 * min_section_size - 4);
 }
 
 // Fraser's example 1 from: https://github.com/Fraser999/Wookie/tree/master/Example%201

@@ -92,6 +92,9 @@ impl MessageContent {
 
                         cond1 && cond2
                     })
+                    .inspect(|block| debug!("Node({}): broadcasting vote from {:?} v{} to {:?} v{} to neighbour {:?}",
+                        our_name, from.prefix, from.version, to.prefix, to.version, block.prefix
+                    ))
                     .flat_map(|block| block.members.iter().cloned())
                     .collect()
             }

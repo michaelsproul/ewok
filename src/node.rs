@@ -129,7 +129,7 @@ impl Node {
 
     /// Update valid and current block sets, return set of newly valid blocks to broadcast,
     /// and merge messages to broadcast.
-    fn update_valid_blocks(&mut self, blocks: &Blocks) -> Vec<(Vote, BTreeSet<Name>)> {
+    fn update_valid_blocks(&mut self, blocks: &Blocks) -> BTreeSet<(Vote, BTreeSet<Name>)> {
         // Update valid blocks.
         let new_votes = mem::replace(&mut self.recent_votes, btreeset!{});
         let new_valid_votes =
@@ -147,7 +147,7 @@ impl Node {
     }
 
     /// Update the set of current blocks.
-    fn update_current_blocks(&mut self, blocks: &Blocks, new_votes: &[(Vote, BTreeSet<Name>)]) {
+    fn update_current_blocks(&mut self, blocks: &Blocks, new_votes: &BTreeSet<(Vote, BTreeSet<Name>)>) {
         // Any of the existing current blocks or the new valid blocks could be
         // in the next set of current blocks.
         let mut potentially_current = btreeset!{};

@@ -46,14 +46,14 @@ impl Blocks {
         valid_blocks: &ValidBlocks,
         vote_counts: &VoteCounts,
         new_votes: BTreeSet<Vote>,
-    ) -> Vec<(Vote, BTreeSet<Name>)> {
+    ) -> BTreeSet<(Vote, BTreeSet<Name>)> {
         // Set of valid blocks to branch out from.
         // Stored as a set of votes where the frontier blocks are the "to" component,
         // and the nodes that voted for them are held alongside (a little hacky).
         let mut frontier: BTreeSet<(Vote, BTreeSet<Name>)> = BTreeSet::new();
 
         // Set of votes for new valid blocks.
-        let mut new_valid_votes = vec![];
+        let mut new_valid_votes = BTreeSet::new();
 
         // If a new vote extends an existing valid block, we need to add it to the frontier set
         // so we can branch out from it.
@@ -83,7 +83,7 @@ impl Blocks {
 
                 // Frontier block is valid. If new, add its vote to the set of new valid votes.
                 if !valid_blocks.contains(&vote.to) {
-                    new_valid_votes.push((vote, voters));
+                    new_valid_votes.insert((vote, voters));
                 }
             }
 

@@ -553,6 +553,7 @@ impl Node {
         {
             vec![]
         } else {
+            trace!("{}: requesting proof for {:?}", self, block.into_block(blocks));
             vec![
                 Message {
                     sender: self.our_name,
@@ -573,8 +574,53 @@ impl Node {
             })
     }
 
-    /// Constructs a message with a vote bundle proving the given block
     fn construct_proof(
+        &self,
+        blocks: &Blocks,
+        block: BlockId,
+        current_blocks: CurrentBlocks,
+        requester: Name,
+    ) -> Message {
+        if !self.valid_blocks.contains(&block) {
+            return Message {
+                sender: self.our_name,
+                recipient: requester,
+                content: NoProof(block),
+            };
+        }
+
+        let proof_size = 10;
+
+        let mut frontier = btreeset!{block};
+        let mut vote_set = btreeset!{};
+
+        while vote_set.len() < proof_size && !frontier.is_empty() {
+            let mut new_frontier = btreeset!{};
+
+            for block in frontier {
+                for (block, vote, voters) in blocks.predecessors(&block, &self.rev_vote_counts) {
+                    let full_vote = (vote, voters);
+                    if !vote_set.contains(&full_vote) {
+                        new_frontier.insert(block);
+                        vote_set.insert(full_vote);
+                    }
+                }
+            }
+
+            frontier = new_frontier;
+        }
+
+        use std::iter::FromIterator;
+
+        Message {
+            sender: self.our_name,
+            recipient: requester,
+            content: VoteBundle(Vec::from_iter(vote_set)),
+        }
+    }
+
+    /// Constructs a message with a vote bundle proving the given block
+    fn construct_proof_old(
         &self,
         blocks: &Blocks,
         block: BlockId,

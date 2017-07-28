@@ -563,14 +563,29 @@ impl Node {
         }
     }
 
-    fn check_path(blocks: &Blocks, current_blocks: &CurrentBlocks, p: &Vec<BlockId>) -> bool {
+    fn check_path(blocks: &Blocks, current_blocks: &CurrentBlocks, p: &[BlockId]) -> bool {
         let current_blocks_objs = blocks.block_contents(current_blocks);
-        let plast = p.last().unwrap();
+        let plast = &p[p.len() - 1];
         let b0 = plast.into_block(blocks);
         current_blocks.contains(plast) ||
             current_blocks_objs.iter().any(|b| {
                 b.prefix.is_compatible(&b0.prefix) && b.version > b0.version
             })
+    }
+
+    fn bundle_predecessors(&self, blocks: &Blocks, block: BlockId, node: Name) -> Message {
+        let bundle = VoteBundle(
+            blocks
+                .predecessors(&block, &self.rev_vote_counts)
+                .into_iter()
+                .map(|(b, _, voters)| (Vote { from: b, to: block }, voters))
+                .collect::<Vec<_>>(),
+        );
+        Message {
+            sender: self.our_name,
+            recipient: node,
+            content: bundle,
+        }
     }
 
     /// Constructs a message with a vote bundle proving the given block
@@ -581,15 +596,17 @@ impl Node {
         current_blocks: CurrentBlocks,
         node: Name,
     ) -> Message {
-        if !self.valid_blocks.contains(&block) ||
-            !current_blocks.iter().any(|b| self.valid_blocks.contains(b))
-        {
+        if !self.valid_blocks.contains(&block) {
             return Message {
                 sender: self.our_name,
                 recipient: node,
                 content: NoProof(block),
             };
         }
+        if Self::check_path(blocks, &current_blocks, &[block]) {
+            return self.bundle_predecessors(blocks, block, node);
+        }
+
         let mut paths = BTreeSet::new();
         paths.insert(vec![block]);
 
@@ -644,6 +661,15 @@ impl Node {
         path.reverse();
         let mut bundle = Vec::new();
 
+        trace!(
+            "{}: found proof for {:?}: {:?}",
+            self,
+            block.into_block(blocks),
+            path.iter()
+                .map(|b| b.into_block(blocks))
+                .collect::<Vec<_>>()
+        );
+
         for vote in path.windows(2) {
             let names = self.vote_counts
                 .get(&vote[0])
@@ -685,6 +711,22 @@ impl Node {
 
     pub fn step_created(&self) -> u64 {
         self.step_created
+    }
+
+    fn bundle_base(&self, blocks: &Blocks, bundle: &[(Vote, BTreeSet<Name>)]) -> Vec<BlockId> {
+        let mut block_ids = BTreeSet::new();
+        for &(ref vote, _) in bundle {
+            block_ids.insert(vote.from);
+            block_ids.insert(vote.to);
+        }
+        block_ids
+            .into_iter()
+            .filter(|&b| {
+                !bundle.into_iter().any(|&(ref vote, ref voters)| {
+                    vote.to == b && vote.is_quorum(blocks, voters)
+                })
+            })
+            .collect()
     }
 
     /// Handle a message intended for us and return messages we'd like to send.
@@ -734,7 +776,10 @@ impl Node {
             }
             VoteBundle(bundle) => {
                 trace!("{}: received a vote bundle from {}", self, message.sender);
-                let messages = self.request_proof(blocks, bundle[0].0.from, message.sender);
+                let mut messages = Vec::new();
+                for block in self.bundle_base(blocks, &bundle) {
+                    messages.extend(self.request_proof(blocks, block, message.sender));
+                }
                 for (vote, voters) in bundle {
                     self.add_vote(vote, voters);
                 }

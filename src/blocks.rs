@@ -45,6 +45,7 @@ impl Blocks {
         &self,
         valid_blocks: &ValidBlocks,
         vote_counts: &VoteCounts,
+        rev_votes: &VoteCounts,
         new_votes: BTreeSet<Vote>,
     ) -> BTreeSet<(Vote, BTreeSet<Name>)> {
         // Set of valid blocks to branch out from.
@@ -77,9 +78,11 @@ impl Blocks {
                 visited_edges.insert(vote.clone());
                 // Branch out to all now valid successors of this block which we haven't visited
                 // yet.
-                new_frontier.extend(self.successors(vote_counts, vote.to).into_iter().filter(
-                    |&(ref vote, _)| !visited_edges.contains(vote),
-                ));
+                new_frontier.extend(
+                    self.successors(vote_counts, rev_votes, vote.to)
+                        .into_iter()
+                        .filter(|&(ref vote, _)| !visited_edges.contains(vote))
+                );
 
                 // Frontier block is valid. If new, add its vote to the set of new valid votes.
                 if !valid_blocks.contains(&vote.to) {
@@ -99,6 +102,7 @@ impl Blocks {
     fn successors<'a>(
         &self,
         vote_counts: &'a VoteCounts,
+        rev_vote_counts: &'a VoteCounts,
         from: BlockId,
     ) -> Vec<(Vote, BTreeSet<Name>)> {
         let from_block = from.into_block(self);
@@ -107,12 +111,7 @@ impl Blocks {
             .into_iter()
             .flat_map(|inner_map| inner_map.iter())
             .map(|(id, votes)| (id.into_block(self), votes))
-            .filter(move |&(succ, _)| {
-                succ.prefix.is_neighbour(&from_block.prefix) || succ.is_admissible_after(from_block)
-            })
-            .filter(move |&(_, voters)| {
-                is_quorum_of(voters, &from_block.members)
-            })
+            .filter(move |&(succ, _)| succ.is_valid_from(from_block, rev_vote_counts, self))
             .map(move |(succ, voters)| {
                 let vote = Vote {
                     from: from,

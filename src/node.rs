@@ -133,7 +133,7 @@ impl Node {
         // Update valid blocks.
         let new_votes = mem::replace(&mut self.recent_votes, btreeset!{});
         let new_valid_votes =
-            blocks.new_valid_blocks(&self.valid_blocks, &self.vote_counts, new_votes);
+            blocks.new_valid_blocks(&self.valid_blocks, &self.vote_counts, &self.rev_vote_counts, new_votes);
         self.valid_blocks.extend(new_valid_votes.iter().map(
             |&(ref vote, _)| {
                 vote.to.clone()

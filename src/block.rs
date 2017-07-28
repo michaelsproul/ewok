@@ -1,6 +1,7 @@
 use name::{Prefix, Name};
-use blocks::Blocks;
+use blocks::{Blocks, VoteCounts};
 
+use std::cmp;
 use std::collections::BTreeSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -144,13 +145,6 @@ impl Block {
                 |name| self.prefix.matches(**name),
             );
             self.members.iter().eq(filtered)
-        }
-        // Merge case
-        else if other.prefix.popped() == self.prefix {
-            let filtered = self.members.iter().filter(
-                |name| other.prefix.matches(**name),
-            );
-            other.members.iter().eq(filtered)
         } else {
             false
         }
@@ -171,10 +165,51 @@ impl Block {
         // Split case.
         else if self.prefix.popped() == other.prefix {
             true
+        } else {
+            false
         }
-        // Merge case
-        else if other.prefix.popped() == self.prefix {
-            true
+    }
+
+    /// Return true if this block is valid with respect to a set of valid blocks.
+    pub fn is_valid_from(&self, anchor: &Block, rev_votes: &VoteCounts, blocks: &Blocks) -> bool {
+        let block_id = self.get_id();
+
+        let from_votes = match rev_votes.get(&block_id) {
+            Some(map) => map,
+            None => return false,
+        };
+
+        let mut zero_parent = None;
+        let mut one_parent = None;
+
+        for (from_block_id, voters) in from_votes {
+            let from_block = from_block_id.into_block(blocks);
+
+            if !is_quorum_of(voters, &from_block.members) {
+                continue;
+            }
+
+            // Non-merge block, we're all good.
+            if (self.is_admissible_after(from_block) ||
+                self.prefix.is_neighbour(&from_block.prefix)) &&
+                anchor == from_block
+            {
+                return true
+            }
+
+            // Check for merge parents.
+            // TODO: might need to try different pairings of zero and one parent blocks??
+            if from_block.prefix == self.prefix.pushed(false) {
+                zero_parent = Some(from_block);
+            } else if from_block.prefix == self.prefix.pushed(true) {
+                one_parent = Some(from_block);
+            }
+        }
+
+        if let (Some(zero_parent), Some(one_parent)) = (zero_parent, one_parent) {
+            (anchor == zero_parent || anchor == one_parent) &&
+            self.version == cmp::max(zero_parent.version, one_parent.version) + 1 &&
+            self.members == (&zero_parent.members) | (&one_parent.members)
         } else {
             false
         }

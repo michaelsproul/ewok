@@ -77,6 +77,12 @@ impl Vote {
             self.from.into_block(blocks),
         )
     }
+
+    pub fn is_quorum(&self, blocks: &Blocks, voters: &BTreeSet<Name>) -> bool {
+        let from = self.from.into_block(blocks);
+        let members = &from.members;
+        is_quorum_of(voters, members)
+    }
 }
 
 #[derive(Debug)]

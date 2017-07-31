@@ -183,11 +183,6 @@ impl Block {
 
 /// Return true if `voters` form a quorum of `members`.
 pub fn is_quorum_of(voters: &BTreeSet<Name>, members: &BTreeSet<Name>) -> bool {
-    #[cfg(not(feature = "fast"))]
     let valid_voters = voters & members;
-    #[cfg(feature = "fast")]
-    let valid_voters = voters;
-
-    assert_eq!(voters.len(), valid_voters.len());
     valid_voters.len() * 2 > members.len()
 }

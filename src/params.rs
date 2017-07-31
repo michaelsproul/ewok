@@ -68,13 +68,33 @@ pub struct NodeParams {
     pub min_section_size: usize,
     /// Number of nodes past the minimum that must be present in all sections when splitting.
     pub split_buffer: usize,
-    /// Number of steps to wait for a candidate to appear in at least one current section.
-    pub join_timeout: u64,
     /// Number of steps to wait before shutting down if we fail to join.
     pub self_shutdown_timeout: u64,
     /// The maximum number of permissible valid blocks for a single prefix and version pair.
     /// Exceeding this will cause the process to panic.
     pub max_conflicting_blocks: usize,
+    /// Parameters related to candidates.
+    pub candidate_params: CandidateParams,
+}
+
+#[derive(Clone, Debug)]
+pub struct CandidateParams {
+    /// Number of steps to wait for a candidate to become approved as a candidate.
+    pub approval_timeout: u64,
+    /// Number of steps to wait for a candidate to pass resource proof.
+    pub resource_proof_timeout: u64,
+    /// Number of steps to wait for a candidate to enter a block once it has passed resource proof.
+    pub block_timeout: u64,
+}
+
+impl Default for CandidateParams {
+    fn default() -> Self {
+        CandidateParams {
+            approval_timeout: 20,
+            resource_proof_timeout: 500,
+            block_timeout: 200,
+        }
+    }
 }
 
 impl Default for NodeParams {
@@ -82,19 +102,21 @@ impl Default for NodeParams {
         NodeParams {
             min_section_size: 8,
             split_buffer: 1,
-            join_timeout: 20,
             self_shutdown_timeout: 100,
             max_conflicting_blocks: 20,
+            candidate_params: CandidateParams::default(),
         }
     }
 }
 
 impl NodeParams {
     pub fn max_timeout(&self) -> u64 {
-        vec![self.join_timeout, self.self_shutdown_timeout]
-            .into_iter()
-            .max()
-            .unwrap()
+        vec![
+            self.self_shutdown_timeout,
+            self.candidate_params.approval_timeout,
+            self.candidate_params.resource_proof_timeout,
+            self.candidate_params.block_timeout,
+        ].into_iter().max().unwrap()
     }
 }
 

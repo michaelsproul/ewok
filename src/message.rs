@@ -23,6 +23,8 @@ pub enum MessageContent {
     RequestProof(BlockId, CurrentBlocks),
     /// Means that the node couldn't prove the requested block
     NoProof(BlockId),
+    /// Vote to approve a candidate. Set is of all nodes voting to approve this candidate.
+    ApproveCandidate(Name, BTreeSet<Name>),
     /// Message sent from joining node (sender) to all section members (recipients).
     NodeJoined,
     /// Message sent to a joining node to get it up to date on the current blocks.
@@ -96,6 +98,13 @@ impl MessageContent {
                         our_name, from.prefix, from.version, to.prefix, to.version, block.prefix
                     ))
                     .flat_map(|block| block.members.iter().cloned())
+                    .collect()
+            }
+            // Send candidate-related votes to our own section.
+            ApproveCandidate(..) => {
+                blocks.section_blocks(current_blocks, our_name)
+                    .into_iter()
+                    .flat_map(|block| block.members.clone())
                     .collect()
             }
             // Send anything else to all connected neighbours.

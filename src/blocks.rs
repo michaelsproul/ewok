@@ -73,8 +73,11 @@ impl Blocks {
         while !frontier.is_empty() {
             let mut new_frontier = BTreeSet::new();
 
-            for (vote, voters) in frontier {
+            for &(ref vote, _) in frontier.iter() {
                 visited_edges.insert(vote.clone());
+            }
+
+            for (vote, voters) in frontier {
                 // Branch out to all now valid successors of this block which we haven't visited
                 // yet.
                 new_frontier.extend(self.successors(vote_counts, vote.to).into_iter().filter(

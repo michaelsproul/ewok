@@ -30,10 +30,10 @@ pub enum Candidate {
 }
 
 impl Candidate {
-    pub fn new(our_name: Name, step: u64) -> Self {
+    pub fn new(step: u64) -> Self {
         UnapprovedCandidate {
             since: step,
-            voters: btreeset!{our_name},
+            voters: btreeset!{},
         }
     }
 

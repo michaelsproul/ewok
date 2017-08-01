@@ -655,6 +655,58 @@ impl Node {
         }
     }
 
+    /// Handle for `NodeJoined` message.
+    fn handle_node_joined(&mut self, joining_node: Name, blocks: &Blocks, step: u64) -> Vec<Message> {
+        debug!("{}: received join message for: {}", self, joining_node);
+
+        if let Some((&existing, _)) = self.candidate(step) {
+            if joining_node != existing {
+                debug!(
+                    "{}: rejecting candidate {}, because we already have a candidate: {}",
+                    self, joining_node, existing
+                );
+                return vec![];
+            }
+        }
+
+        let quorum_of_votes = {
+            let our_name = self.our_name;
+            let current_block = self.our_current_section_blocks(blocks)[0];
+            let candidate = self.candidates
+                .entry(joining_node)
+                .or_insert_with(|| Candidate::new(step));
+
+            candidate.add_approval_vote(current_block, our_name, step)
+        };
+        self.connections.insert(joining_node);
+        self.connect_requests.insert(joining_node);
+
+        let connect_msg = Message {
+            sender: self.our_name,
+            recipient: joining_node,
+            content: Connect,
+        };
+        let bootstrap_msg = self.construct_bootstrap_msg(joining_node);
+
+        let approval_msg = if let Some(quorum_of_votes) = quorum_of_votes {
+            ApproveCandidate(joining_node, quorum_of_votes)
+        } else {
+            ApproveCandidate(joining_node, btreeset!{self.our_name})
+        };
+
+        let approval_msgs = self.broadcast(
+            blocks,
+            vec![approval_msg],
+            step
+        );
+
+        let mut all_msgs = approval_msgs;
+        all_msgs.push(connect_msg);
+        all_msgs.push(bootstrap_msg);
+
+        all_msgs
+    }
+
     /// Handler for approve candidate message
     fn handle_approve_candidate(
         &mut self,
@@ -664,12 +716,23 @@ impl Node {
         blocks: &Blocks,
     ) -> Option<MessageContent>
     {
+        if let Some((&existing_candidate, _)) = self.candidate(step) {
+            if candidate_name != existing_candidate {
+                trace!(
+                    "{}: ignoring ApproveCandidate message for {}, as we already have a candidate",
+                    self,
+                    candidate_name,
+                );
+                return None;
+            }
+        }
+
         let our_name = self.our_name;
         let our_current_block = self.our_current_section_blocks(blocks)[0];
 
         let candidate = self.candidates
             .entry(candidate_name)
-            .or_insert_with(|| Candidate::new(our_name, step));
+            .or_insert_with(|| Candidate::new(step));
 
         for voter in voters {
             if let Some(quorum_of_voters) =
@@ -684,6 +747,13 @@ impl Node {
         }
 
         None
+    }
+
+    /// True if we already have a candidate that hasn't timed out.
+    fn candidate(&self, step: u64) -> Option<(&Name, &Candidate)> {
+        self.candidates
+            .iter()
+            .find(|&(_, ref cand)| !cand.has_timed_out(&self.params.candidate_params, step))
     }
 
     /// Returns true if the peer is known and its state is `Disconnected`.
@@ -711,32 +781,7 @@ impl Node {
     pub fn handle_message(&mut self, message: Message, blocks: &Blocks, step: u64) -> Vec<Message> {
         let to_send = match message.content {
             NodeJoined => {
-                let joining_node = message.sender;
-                debug!("{}: received join message for: {}", self, joining_node);
-
-                self.candidates.insert(
-                    joining_node,
-                    Candidate::new(self.our_name, step),
-                );
-                self.connections.insert(joining_node);
-
-                let connect_msg = Message {
-                    sender: self.our_name,
-                    recipient: joining_node,
-                    content: Connect,
-                };
-                let bootstrap_msg = self.construct_bootstrap_msg(joining_node);
-                let approval_msgs = self.broadcast(
-                    blocks,
-                    vec![ApproveCandidate(joining_node, btreeset!{self.our_name})],
-                    step
-                );
-
-                let mut all_msgs = approval_msgs;
-                all_msgs.push(connect_msg);
-                all_msgs.push(bootstrap_msg);
-
-                all_msgs
+                self.handle_node_joined(message.sender, blocks, step)
             }
             VoteMsg(vote) => {
                 trace!(
@@ -782,7 +827,7 @@ impl Node {
                     self.handle_approve_candidate(candidate_name, voters, step, blocks)
                 {
                     trace!("{}: broadcasting ApproveCandidate({})", self, candidate_name);
-                    return self.broadcast(blocks, vec![agreement_msg], step)
+                    self.broadcast(blocks, vec![agreement_msg], step)
                 } else {
                     vec![]
                 }

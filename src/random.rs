@@ -63,3 +63,8 @@ pub fn do_with_probability(p: f64) -> bool {
 pub fn shuffle<T>(values: &mut [T]) {
     WEAK_RNG.with(|rng| rng.borrow_mut().shuffle(values))
 }
+
+/// Sample a value from the interval [start, end).
+pub fn rand_int(start: u64, end: u64) -> u64 {
+    WEAK_RNG.with(|rng| rng.borrow_mut().gen_range(start, end))
+}

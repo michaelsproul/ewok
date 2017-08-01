@@ -245,6 +245,17 @@ impl Node {
 
     /// Called once per step.
     pub fn update_state(&mut self, blocks: &mut Blocks, step: u64) -> Vec<Message> {
+        // Check resource proof for candidates.
+        {
+            let candidates = &mut self.candidates;
+            let cand_params = &self.params.candidate_params;
+            for (cand_name, candidate) in candidates {
+                if candidate.check_resource_proof(cand_params, step) {
+                    debug!("Node({}): our candidate {} passed resource proof", self.our_name, cand_name);
+                }
+            }
+        }
+
         // Update valid and current blocks.
         let new_valid_votes = self.update_valid_blocks(blocks);
 
@@ -672,9 +683,10 @@ impl Node {
         let quorum_of_votes = {
             let our_name = self.our_name;
             let current_block = self.our_current_section_blocks(blocks)[0];
+            let params = &self.params.candidate_params;
             let candidate = self.candidates
                 .entry(joining_node)
-                .or_insert_with(|| Candidate::new(step));
+                .or_insert_with(|| Candidate::new(params, step));
 
             candidate.add_approval_vote(current_block, our_name, step)
         };
@@ -727,12 +739,12 @@ impl Node {
             }
         }
 
-        let our_name = self.our_name;
         let our_current_block = self.our_current_section_blocks(blocks)[0];
+        let cand_params = &self.params.candidate_params;
 
         let candidate = self.candidates
             .entry(candidate_name)
-            .or_insert_with(|| Candidate::new(step));
+            .or_insert_with(|| Candidate::new(cand_params, step));
 
         for voter in voters {
             if let Some(quorum_of_voters) =

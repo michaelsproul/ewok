@@ -270,7 +270,7 @@ impl Simulation {
 
     /// Run the simulation, returning Ok iff the network was consistent upon termination.
     pub fn run(&mut self) -> Result<BTreeMap<Prefix, Block>, [u32; 4]> {
-        let max_extra_steps = 1000;
+        let max_extra_steps = 2000;
         let mut no_op_step_count = 0;
 
         for step in 0.. {

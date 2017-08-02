@@ -33,7 +33,7 @@ pub fn check_consistency(
 
         let block = blocks.into_iter().next().unwrap();
 
-        // Allow a quorum if we have only one section, otherwise require `min_section_size`.
+        // Allow any size if we have only one section, otherwise require `min_section_size`.
         if num_sections > 1 && block.members.len() < min_section_size {
             failed = true;
             error!(

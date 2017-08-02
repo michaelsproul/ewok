@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{BufReader, BufRead};
 
 lazy_static!{
-    static ref AGREEMENT_RE: Regex = Regex::new(r"^Node\((?P<node>[0-9a-f]{6}\.\.)\): received agreement for DebugVote \{ from: Block \{ prefix: Prefix\((?P<pfrom>[01]*)\), version: (?P<vfrom>\d+), members: \{(?P<mfrom>[0-9a-f]{6}\.\.(, [0-9a-f]{6}\.\.)*)\} \}, to: Block \{ prefix: Prefix\((?P<pto>[01]*)\), version: (?P<vto>\d+), members: \{(?P<mto>[0-9a-f]{6}\.\.(, [0-9a-f]{6}\.\.)*)\} \} \}").unwrap();
+    static ref AGREEMENT_RE: Regex = Regex::new(r"^Node\((?P<node>[0-9a-f]{6}\.\.)\): new valid vote: DebugVote \{ from: Block \{ prefix: Prefix\((?P<pfrom>[01]*)\), version: (?P<vfrom>\d+), members: \{(?P<mfrom>[0-9a-f]{6}\.\.(, [0-9a-f]{6}\.\.)*)\} \}, to: Block \{ prefix: Prefix\((?P<pto>[01]*)\), version: (?P<vto>\d+), members: \{(?P<mto>[0-9a-f]{6}\.\.(, [0-9a-f]{6}\.\.)*)\} \} \}").unwrap();
     static ref STEP_RE: Regex = Regex::new(r"^-- step (?P<step>\d+) \(.+\) (?P<nodes>\d+) nodes --").unwrap();
     static ref SENT_RE: Regex = Regex::new(r"^Network: sent (?P<sent>\d+) messages from (?P<name>[0-9a-f]{6})\.\.").unwrap();
     static ref QUEUE_RE: Regex = Regex::new(r"^- (?P<count>\d+) messages still in queue").unwrap();

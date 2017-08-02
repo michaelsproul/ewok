@@ -264,10 +264,9 @@ impl Node {
                 .into_iter()
                 .inspect(|&(ref vote, _)| {
                     debug!(
-                        "{}: received agreement for {:?} from {}",
+                        "{}: new valid vote: {:?}",
                         self,
                         vote.as_debug(blocks),
-                        self.our_name,
                     );
                 })
                 .filter(|&(ref vote, _)| !vote.is_witnessing(blocks))

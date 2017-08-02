@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::mem;
 use message::Message;
 use name::Name;
 
@@ -32,7 +33,7 @@ impl Network {
         // p_drop = (1 - p)^max_delay
         1.0 - p_drop.powf(1.0 / max_delay as f64)
 
-        // TODO: the above calculation is no longer valid with in-order delivery because
+        // NOTE: The above calculation is no longer valid with in-order delivery because
         // the delivery of previous messages effects the delivery of later messages.
         // It's probably a good-enough approximation for now however.
     }
@@ -71,16 +72,22 @@ impl Network {
         debug_assert_eq!(num_undelivered, 0);
 
         for (step_sent, messages) in conn_messages.range_mut(start_step..end_step) {
-            // Partition randomly based on p, whilst also delivering any messages
-            // which were sent at start step.
-            let (deliver, leave) = messages.drain(..).partition(|_| {
-                let deliver_random = do_with_probability(prob_deliver);
-                let force_deliver = *step_sent == start_step && end_step >= max_delay;
-                force_deliver || deliver_random
-            });
+            // Deliver the messages if they were sent at the start step.
+            if *step_sent == start_step && end_step >= max_delay {
+                all_deliver.extend(messages.drain(..));
+                continue;
+            }
+
+            let num_messages = messages.len();
+            let num_delivered = (1..messages.len() + 1)
+                .take_while(|_| do_with_probability(prob_deliver))
+                .last()
+                .unwrap_or(0);
+
+            let leave = messages.split_off(num_messages - num_delivered);
+            let deliver = mem::replace(messages, leave);
 
             all_deliver.extend(deliver);
-            *messages = leave;
 
             // If messages remain at this step, we can't deliver anything sent on a later step,
             // so return.
@@ -123,5 +130,83 @@ impl Network {
             .flat_map(BTreeMap::values)
             .map(Vec::len)
             .sum()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use message::MessageContent;
+    use message::MessageContent::*;
+
+    fn test_message(content: MessageContent) -> Message {
+        Message {
+            sender: Name(0),
+            recipient: Name(1),
+            content,
+        }
+    }
+
+    #[test]
+    fn in_order_delivery_diff_step() {
+        let connect = test_message(Connect);
+        let disconnect = test_message(Disconnect);
+
+        let conn_messages = btreemap! {
+            50 => vec![connect.clone()],
+            51 => vec![disconnect.clone()],
+        };
+        let max_delay = 20;
+        let start_step = 45;
+        let end_step = start_step + max_delay;
+        let prob_deliver = 0.5;
+
+        for _ in 0..50 {
+            let mut conn_messages = conn_messages.clone();
+
+            let delivered = Network::receive_from_conn(
+                &mut conn_messages,
+                prob_deliver,
+                max_delay,
+                start_step,
+                end_step,
+            );
+
+            // Check that the disconnect isn't delivered before the connect.
+            if let Some(first_message) = delivered.first() {
+                assert_ne!(first_message, &disconnect);
+            }
+        }
+    }
+
+    #[test]
+    fn in_order_delivery_same_step() {
+        let connect = test_message(Connect);
+        let disconnect = test_message(Disconnect);
+
+        let conn_messages = btreemap! {
+            50 => vec![connect.clone(), disconnect.clone()],
+        };
+        let max_delay = 20;
+        let start_step = 45;
+        let end_step = start_step + max_delay;
+        let prob_deliver = 0.5;
+
+        for _ in 0..50 {
+            let mut conn_messages = conn_messages.clone();
+
+            let delivered = Network::receive_from_conn(
+                &mut conn_messages,
+                prob_deliver,
+                max_delay,
+                start_step,
+                end_step,
+            );
+
+            // Check that the disconnect isn't delivered before the connect.
+            if let Some(first_message) = delivered.first() {
+                assert_ne!(first_message, &disconnect);
+            }
+        }
     }
 }

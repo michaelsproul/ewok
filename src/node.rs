@@ -729,6 +729,11 @@ impl Node {
             .collect()
     }
 
+    fn should_be_connected(&self, node: Name, blocks: &Blocks) -> bool {
+        let neighbours = nodes_in_any(blocks, &self.current_blocks);
+        neighbours.contains(&node)
+    }
+
     /// Handle a message intended for us and return messages we'd like to send.
     pub fn handle_message(&mut self, message: Message, blocks: &Blocks, step: u64) -> Vec<Message> {
         let to_send = match message.content {
@@ -742,6 +747,7 @@ impl Node {
                     Candidate { step_added: step },
                 );
                 self.connections.insert(joining_node);
+                self.connect_requests.insert(joining_node);
 
                 let connect_msg = Message {
                     sender: self.our_name,
@@ -801,21 +807,31 @@ impl Node {
                 vec![]
             }
             Connect => {
-                if self.connections.insert(message.sender) {
-                    debug!("{}: obtained a connection to {}", self, message.sender);
-                }
-                if !self.connect_requests.contains(&message.sender) {
-                    trace!("{}: connecting back to {}", self, message.sender);
-                    self.connect_requests.insert(message.sender);
+                if self.should_be_connected(message.sender, blocks) {
+                    if self.connections.insert(message.sender) {
+                        debug!("{}: obtained a connection to {}", self, message.sender);
+                    }
+                    if !self.connect_requests.contains(&message.sender) {
+                        trace!("{}: connecting back to {}", self, message.sender);
+                        self.connect_requests.insert(message.sender);
+                        vec![
+                            Message {
+                                sender: self.our_name,
+                                recipient: message.sender,
+                                content: MessageContent::Connect,
+                            },
+                        ]
+                    } else {
+                        vec![]
+                    }
+                } else {
                     vec![
                         Message {
                             sender: self.our_name,
                             recipient: message.sender,
-                            content: MessageContent::Connect,
-                        },
+                            content: Disconnect,
+                        }
                     ]
-                } else {
-                    vec![]
                 }
             }
             RequestProof(block, current_blocks) => {

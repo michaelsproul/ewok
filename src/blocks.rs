@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::collections::{BTreeSet, BTreeMap, HashMap};
 use std::borrow::Borrow;
 
-use block::{BlockId, Block, Vote, is_quorum_of};
+use block::{BlockId, Block, Vote};
 use name::{Name, Prefix};
 
 pub type ValidBlocks = BTreeSet<BlockId>;
@@ -113,9 +113,6 @@ impl Blocks {
             .filter(move |&(succ, _)| {
                 succ.prefix.is_neighbour(&from_block.prefix) || succ.is_admissible_after(from_block)
             })
-            .filter(move |&(_, voters)| {
-                is_quorum_of(voters, &from_block.members)
-            })
             .map(move |(succ, voters)| {
                 let vote = Vote {
                     from: from,
@@ -123,6 +120,7 @@ impl Blocks {
                 };
                 (vote, voters.clone())
             })
+            .filter(|&(ref vote, ref voters)| vote.is_quorum(self, voters))
             .collect()
     }
 
@@ -216,8 +214,11 @@ impl Blocks {
         rev_votes.get(block).map_or_else(BTreeSet::new, |map| {
             map.into_iter()
                 .filter(|&(block_from, votes)| {
-                    let block_from_obj = block_from.into_block(self);
-                    is_quorum_of(votes, &block_from_obj.members)
+                    let vote = Vote {
+                        from: *block_from,
+                        to: *block,
+                    };
+                    vote.is_quorum(self, votes)
                 })
                 .map(|(block_from, votes)| {
                     (

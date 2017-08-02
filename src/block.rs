@@ -80,7 +80,14 @@ impl Vote {
 
     pub fn is_quorum(&self, blocks: &Blocks, voters: &BTreeSet<Name>) -> bool {
         let from = self.from.into_block(blocks);
-        let members = &from.members;
+        let to = self.to.into_block(blocks);
+        let members = if to.members.len() == from.members.len() - 1 &&
+            from.members.difference(&to.members).count() == 1
+        {
+            &to.members
+        } else {
+            &from.members
+        };
         is_quorum_of(voters, members)
     }
 }
@@ -188,7 +195,7 @@ impl Block {
 }
 
 /// Return true if `voters` form a quorum of `members`.
-pub fn is_quorum_of(voters: &BTreeSet<Name>, members: &BTreeSet<Name>) -> bool {
+fn is_quorum_of(voters: &BTreeSet<Name>, members: &BTreeSet<Name>) -> bool {
     #[cfg(not(feature = "fast"))]
     let valid_voters = voters & members;
     #[cfg(feature = "fast")]

@@ -39,6 +39,7 @@ impl Block {
                 hash(&self.members))
     }
 
+    #[allow(unused)]
     pub fn get_label(&self) -> String {
         format!("<<font point-size=\"40\">p[{}] v{}</font><br/>Members: <br/>{}>",
                 self.prefix,

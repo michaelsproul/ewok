@@ -367,6 +367,7 @@ impl Simulation {
         debug!("-- final node states --");
         for node in self.nodes.values() {
             debug!("{:?}", node.as_debug(&self.blocks));
+            trace!("{:#?}", node.connections);
         }
 
         assert!(

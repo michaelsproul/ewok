@@ -204,9 +204,7 @@ impl Node {
         let to_disconnect: BTreeSet<Name> = {
             self.connections
                 .iter()
-                .filter(|name| {
-                    !neighbours.contains(&name) && !self.is_candidate(&name, step)
-                })
+                .filter(|name| !self.should_be_connected(**name, step, blocks))
                 .cloned()
                 .collect()
         };
@@ -291,7 +289,7 @@ impl Node {
             .flat_map(move |content| {
                 let mut recipients =
                     content.recipients(blocks, &self.current_blocks, self.our_name);
-                recipients.extend(self.nodes_to_add(step));
+                recipients.extend(self.nodes_to_add(step, blocks));
                 recipients.remove(&self.our_name);
 
                 recipients.into_iter().map(move |recipient| {
@@ -344,12 +342,15 @@ impl Node {
     }
 
     /// Vote to add the oldest candidate (from our perspective) that hasn't timed out.
-    fn nodes_to_add(&self, step: u64) -> Vec<Name> {
+    fn nodes_to_add(&self, step: u64, blocks: &Blocks) -> Vec<Name> {
         self.candidates
             .iter()
             .filter(|&(name, candidate)| {
+                let our_current_block = self.our_current_section_blocks(blocks)[0];
+
                 self.connections.contains(name) &&
-                    candidate.is_recent(self.params.join_timeout, step)
+                    candidate.is_recent(self.params.join_timeout, step) &&
+                    !our_current_block.members.contains(name)
             })
             .min_by_key(|&(_, candidate)| candidate.step_added)
             .map(|(name, _)| *name)
@@ -394,7 +395,7 @@ impl Node {
         let blocks_to_add = {
             let mut blocks_to_add = BTreeSet::new();
             for block in self.our_current_blocks(blocks) {
-                for node in self.nodes_to_add(step) {
+                for node in self.nodes_to_add(step, blocks) {
                     if self.could_be_added(node, block) {
                         trace!("{}: voting to add {} to: {:?}", self, node, block);
                         let added = block.add_node(node);
@@ -729,9 +730,9 @@ impl Node {
             .collect()
     }
 
-    fn should_be_connected(&self, node: Name, blocks: &Blocks) -> bool {
+    fn should_be_connected(&self, node: Name, step: u64, blocks: &Blocks) -> bool {
         let neighbours = nodes_in_any(blocks, &self.current_blocks);
-        neighbours.contains(&node)
+        neighbours.contains(&node) || self.is_candidate(&node, step)
     }
 
     /// Handle a message intended for us and return messages we'd like to send.
@@ -807,7 +808,7 @@ impl Node {
                 vec![]
             }
             Connect => {
-                if self.should_be_connected(message.sender, blocks) {
+                if self.should_be_connected(message.sender, step, blocks) {
                     if self.connections.insert(message.sender) {
                         debug!("{}: obtained a connection to {}", self, message.sender);
                     }
